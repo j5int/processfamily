@@ -4,7 +4,7 @@
 
 import threading
 import ctypes
- 
+
 def thread_async_raise(thread, exctype):
     """raises the exception, performs cleanup if needed"""
     # if not inspect.isclass(exctype):
@@ -17,11 +17,11 @@ def thread_async_raise(thread, exctype):
     if res == 0:
         raise ValueError("invalid thread id")
     elif res != 1:
-        # """if it returns a number greater than one, you're in trouble, 
+        # """if it returns a number greater than one, you're in trouble,
         # and you should call it again with exc=NULL to revert the effect"""
         ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, 0)
         raise SystemError("PyThreadState_SetAsyncExc failed")
- 
+
 def get_thread_id(thread):
     if not thread.isAlive():
         raise threading.ThreadError("the thread is not active")
@@ -45,7 +45,7 @@ class Thread(threading.Thread):
         thread_async_raise(self._get_my_tid(), exctype)
 
     def terminate(self):
-        """raises SystemExit in the context of the given thread, which should 
+        """raises SystemExit in the context of the given thread, which should
         cause the thread to exit silently (unless caught)"""
         self.raise_exc(SystemExit)
 
