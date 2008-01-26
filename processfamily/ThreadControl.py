@@ -19,7 +19,7 @@ def get_thread_callstr(thread):
         thread_target = thread._Thread__target
         callargs = ", ".join([repr(arg) for arg in thread_args] + ["%s=%r" % (name, value) for name, value in thread_kwargs.items()])
         return "%s was called with %s(%s)" % (thread.getName(), thread_target.__name__, callargs)
-    except Exception, e:
+    except StandardError, e:
         return "Could not calculate thread arguments for thread (error %s)" % e
 
 def graceful_stop_thread(thread, thread_wait=0.5):
@@ -41,7 +41,7 @@ def forceful_stop_thread(thread):
         logging.warning("Stopping thread %s forcefully" % thread.getName())
         try:
             thread._Thread__stop()
-        except Exception, e:
+        except StandardError, e:
             logging.warning("Error stopping thread %s: %s" % (thread.getName(), e))
     return not thread.isAlive()
 
