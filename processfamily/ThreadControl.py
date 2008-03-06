@@ -17,8 +17,12 @@ def get_thread_callstr(thread):
         thread_args = thread._Thread__args
         thread_kwargs = thread._Thread__kwargs
         thread_target = thread._Thread__target
+        if thread_target:
+            thread_name = thread_target.__name__
+        else:
+            thread_name = "%s.%s" % (thread.__class__.__module__, thread.__class__.__name__)
         callargs = ", ".join([repr(arg) for arg in thread_args] + ["%s=%r" % (name, value) for name, value in thread_kwargs.items()])
-        return "%s was called with %s(%s)" % (thread.getName(), thread_target.__name__, callargs)
+        return "%s was called with %s(%s)" % (thread.getName(), thread_name, callargs)
     except StandardError, e:
         return "Could not calculate thread arguments for thread (error %s)" % e
 
@@ -60,7 +64,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0):
     for thread in remaining_threads:
         thread_name = thread.getName()
         callstr = get_thread_callstr(thread)
-        logging.warning("Shutting down but thread %s still remains alive; %s" % (thread_name, callstr))
+        logging.warning("Shutting down but thread still remains alive; %s" % (thread_name, callstr))
         threads_to_stop.append(thread)
     if not threads_to_stop:
         return
