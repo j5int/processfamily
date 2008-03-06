@@ -64,7 +64,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0):
     for thread in remaining_threads:
         thread_name = thread.getName()
         callstr = get_thread_callstr(thread)
-        logging.warning("Shutting down but thread still remains alive; %s" % (thread_name, callstr))
+        logging.warning("Shutting down but thread still remains alive: %s" % (callstr))
         threads_to_stop.append(thread)
     if not threads_to_stop:
         return
