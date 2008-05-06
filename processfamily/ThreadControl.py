@@ -59,7 +59,10 @@ def stop_thread(thread, thread_wait=1.0):
 def stop_threads(global_wait=2.0, thread_wait=1.0):
     """enumerates remaining threads and stops them"""
     current_thread = threading.currentThread()
-    remaining_threads = [thread for thread in threading.enumerate() if thread != current_thread and thread.isAlive()]
+    # remaining_threads = [thread for thread in threading.enumerate() if thread != current_thread and thread.isAlive()]
+    remaining_threads = threading._active.values()
+    if current_thread in remaining_threads:
+        remaining_threads.remove(current_thread)
     threads_to_stop = []
     for thread in remaining_threads:
         thread_name = thread.getName()
@@ -68,14 +71,20 @@ def stop_threads(global_wait=2.0, thread_wait=1.0):
         threads_to_stop.append(thread)
     if not threads_to_stop:
         return
-    time.sleep(global_wait)
     threads_to_stop2 = []
-    for thread in threads_to_stop:
-        if not graceful_stop_thread(thread, thread_wait):
-            threads_to_stop2.append(thread)
+    try:
+        time.sleep(global_wait)
+        for thread in threads_to_stop:
+            if not graceful_stop_thread(thread, thread_wait):
+                threads_to_stop2.append(thread)
+    except KeyboardInterrupt, e:
+        logging.warning("Keyboard Interrupt received while waiting for thread; abandoning civility and forcing them all to stop")
+        threads_to_stop2 = threading._active.values()
+        if current_thread in threads_to_stop2:
+            threads_to_stop2.remove(current_thread)
     for thread in threads_to_stop2:
         forceful_stop_thread(thread)
-    unstoppable_thread_names = [thread.getName() for thread in threading.enumerate() if thread != current_thread and thread.isAlive()]
+    unstoppable_thread_names = [thread.getName() for thread in threading._active.values() if thread != current_thread]
     if unstoppable_thread_names:
         logging.error("The following threads could not be stopped: %s" % ", ".join(unstoppable_thread_names))
 
