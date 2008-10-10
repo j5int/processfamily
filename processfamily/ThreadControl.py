@@ -56,13 +56,23 @@ def stop_thread(thread, thread_wait=1.0):
     else:
         return forceful_stop_thread(thread)
 
-def stop_threads(global_wait=2.0, thread_wait=1.0):
+def filter_threads(threads, current_thread=None, exclude_threads=[]):
+    """filters the threads to exclude the current thread (which can be given as a speedup) and other threads if given"""
+    remaining_threads = threads[:]
+    if current_thread is None:
+        current_thread = threading.currentThread()
+    if current_thread in remaining_threads:
+        remaining_threads.remove(current_thread)
+    for exclude_thread in exclude_threads:
+        if exclude_thread in remaining_threads:
+            remaining_threads.remove(exclude_thread)
+    return remaining_threads
+
+def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=[]):
     """enumerates remaining threads and stops them"""
     current_thread = threading.currentThread()
     # remaining_threads = [thread for thread in threading.enumerate() if thread != current_thread and thread.isAlive()]
-    remaining_threads = threading._active.values()
-    if current_thread in remaining_threads:
-        remaining_threads.remove(current_thread)
+    remaining_threads = filter_threads(threading._active.values(), current_thread, exclude_threads)
     threads_to_stop = []
     for thread in remaining_threads:
         thread_name = thread.getName()
@@ -79,9 +89,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0):
                 threads_to_stop2.append(thread)
     except KeyboardInterrupt, e:
         logging.warning("Keyboard Interrupt received while waiting for thread; abandoning civility and forcing them all to stop")
-        threads_to_stop2 = threading._active.values()
-        if current_thread in threads_to_stop2:
-            threads_to_stop2.remove(current_thread)
+        threads_to_stop2 = filter_threads(threading._active.values(), current_thread, exclude_threads)
     for thread in threads_to_stop2:
         forceful_stop_thread(thread)
     unstoppable_thread_names = [thread.getName() for thread in threading._active.values() if thread != current_thread]
