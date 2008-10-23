@@ -31,7 +31,10 @@ def graceful_stop_thread(thread, thread_wait=0.5):
     if thread.isAlive():
         if ThreadRaise is not None:
             # this attempts to raise an exception in the thread; the sleep allows the switch or natural end of the thread
-            ThreadRaise.thread_async_raise(thread, SystemExit)
+            try:
+                ThreadRaise.thread_async_raise(thread, SystemExit)
+            except Exception, e:
+                logging.debug("Error trying to raise exit message in thread %s" % thread.getName())
         time.sleep(thread_wait)
     if thread.isAlive():
         return False
