@@ -13,8 +13,10 @@ def thread_async_raise(thread, exctype):
         tid = get_thread_id(thread)
     else:
         tid = thread
-    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, ctypes.py_object(exctype))
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), ctypes.py_object(exctype))
     if res == 0:
+        if tid in threading._active:
+            raise ValueError("valid thread id, but setting exception failed")
         raise ValueError("invalid thread id")
     elif res != 1:
         # """if it returns a number greater than one, you're in trouble,
