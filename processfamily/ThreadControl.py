@@ -2,6 +2,7 @@
 
 """Utilities for controlling other threads (usually stopping them!)"""
 
+from j5.Logging import Errors
 import threading
 import time
 import logging
@@ -35,6 +36,7 @@ def graceful_stop_thread(thread, thread_wait=0.5):
                 ThreadRaise.thread_async_raise(thread, SystemExit)
             except Exception, e:
                 logging.debug("Error trying to raise exit message in thread %s" % thread.getName())
+                logging.debug(Errors.traceback_str())
         time.sleep(thread_wait)
     if thread.isAlive():
         return False
