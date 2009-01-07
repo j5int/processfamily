@@ -25,6 +25,9 @@ def thread_async_raise(thread, exctype):
 def get_thread_id(thread):
     if not thread.isAlive():
         raise threading.ThreadError("the thread is not active")
+    # Is it defined on the thread object?
+    if hasattr(thread, "ident"):
+        return thread.ident
     # do we have it cached?
     if hasattr(thread, "_thread_id"):
         return thread._thread_id
