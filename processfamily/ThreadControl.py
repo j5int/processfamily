@@ -78,8 +78,9 @@ def filter_threads(threads, current_thread=None, exclude_threads=None):
 def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
     """enumerates remaining threads and stops them"""
     current_thread = threading.currentThread()
-    # remaining_threads = [thread for thread in threading.enumerate() if thread != current_thread and thread.isAlive()]
-    remaining_threads = filter_threads(threading._active.values(), current_thread, exclude_threads)
+    def find_stop_threads():
+        return [t for t in filter_threads(threading._active.values(), current_thread, exclude_threads) if t.isAlive()]
+    remaining_threads = find_stop_threads()
     threads_to_stop = []
     for thread in remaining_threads:
         thread_name = thread.getName()
@@ -96,10 +97,14 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
                 threads_to_stop2.append(thread)
     except KeyboardInterrupt, e:
         logging.warning("Keyboard Interrupt received while waiting for thread; abandoning civility and forcing them all to stop")
-        threads_to_stop2 = filter_threads(threading._active.values(), current_thread, exclude_threads)
+        threads_to_stop2 = find_stop_threads()
     for thread in threads_to_stop2:
         forceful_stop_thread(thread)
-    unstoppable_thread_names = [thread.getName() for thread in threading._active.values() if thread != current_thread]
+    last_sleep = time.time() + global_wait
+    while find_stop_threads() and time.time() < last_sleep:
+        # give them half a chance to stop
+        time.sleep(thread_wait/5)
+    unstoppable_thread_names = [thread.getName() for thread in find_stop_threads()]
     if unstoppable_thread_names:
         logging.error("The following threads could not be stopped: %s" % ", ".join(unstoppable_thread_names))
 
