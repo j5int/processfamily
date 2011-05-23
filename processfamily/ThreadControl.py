@@ -35,8 +35,7 @@ def graceful_stop_thread(thread, thread_wait=0.5):
             try:
                 ThreadRaise.thread_async_raise(thread, SystemExit)
             except Exception, e:
-                logging.debug("Error trying to raise exit message in thread %s" % thread.getName())
-                logging.debug(Errors.traceback_str())
+                logging.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), Errors.traceback_str())
         time.sleep(thread_wait)
     if thread.isAlive():
         return False

@@ -27,7 +27,7 @@ def shutdown_thread(thread, force=INCREASING, loglevel=logging.DEBUG):
     """Shuts the given thread (given by Thread object or ident) down, with logging set to the given loglevel, and returns success"""
     thread = find_thread(thread)
     lines = []
-    logger = logging.getLogger()
+    logger = logging.getLogger("j5.OS")
     previous_loglevel = logger.level
     logger.setLevel(loglevel)
     try:
@@ -55,25 +55,27 @@ def find_wsgi_requests(thread=None):
 
 def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
     """Filters the given objects (or all objects in the system if not given) and returns those that are wsgi environs"""
+    logger = logging.getLogger("j5.OS")
     objects = gc.get_objects() if objects is None else objects
-    logging.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
+    logger.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
     dicts = filter(lambda i: isinstance(i, dict), objects)
-    logging.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
+    logger.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
     environs = filter(lambda d: "wsgi.input" in d, dicts)
-    logging.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
+    logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
     return environs
 
 def find_thread_frames(objects=None, loglevel=logging.INFO):
     """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
+    logger = logging.getLogger("j5.OS")
     objects = gc.get_objects() if objects is None else objects
     # frames = filter(lambda i: isinstance(i, types.FrameType), objects)
     frames = filter(lambda i: 'frame' in repr(type(i)) and hasattr(i, "f_back"), objects)
-    logging.log(loglevel, "find_thread_frames found %d frames", len(frames))
+    logger.log(loglevel, "find_thread_frames found %d frames", len(frames))
     parent_frames = filter(lambda f: f.f_back is None, frames)
-    logging.log(loglevel, "find_thread_frames found %d parent frames (threads)", len(parent_frames))
+    logger.log(loglevel, "find_thread_frames found %d parent frames (threads)", len(parent_frames))
     back_frames = set(map(lambda f: f.f_back, frames))
     leaf_frames = filter(lambda f: f not in back_frames, frames)
-    logging.log(loglevel, "find_thread_frames found %d leaf frames (threads)", len(leaf_frames))
+    logger.log(loglevel, "find_thread_frames found %d leaf frames (threads)", len(leaf_frames))
     for n, frame in enumerate(leaf_frames):
         head_frame = frame
         while head_frame.f_back is not None:
