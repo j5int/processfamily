@@ -53,3 +53,13 @@ def find_wsgi_requests(thread=None):
                     if conn is None or item.conn is conn:
                         yield item
 
+def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
+    """Filters the given objects (or all objects in the system if not given) and returns those that are wsgi environs"""
+    objects = gc.get_objects() if objects is None else objects
+    logging.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
+    dicts = filter(lambda i: isinstance(i, dict), objects)
+    logging.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
+    environs = filter(lambda d: "wsgi.input" in d, dicts)
+    logging.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
+    return environs
+
