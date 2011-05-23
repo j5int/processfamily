@@ -58,17 +58,24 @@ def find_wsgi_requests(thread=None):
                     if conn is None or item.conn is conn:
                         yield item
 
-def find_wsgi_environs(rfile=None, objects=None, loglevel=logging.DEBUG):
+def environ_has_rfile(environ, rfile):
+    """Returns whether the given environ matches the given rfile (including a wrapped version of it)"""
+    wsgi_input = environ.get("wsgi.input", None)
+    if not wsgi_input:
+        return False
+    return wsgi_input is rfile or getattr(wsgi_input, "rfile", None) is rfile
+
+def find_wsgi_environs(rfile=None, objects=None, loglevel=logging.INFO):
     """Filters the given objects (or all objects in the system if not given) and returns those that are wsgi environs, matching rfile if provided"""
     objects = gc.get_objects() if objects is None else objects
     logger.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
     dicts = filter(lambda i: isinstance(i, dict), objects)
     del objects
     logger.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
-    if rfile is None:
-        environs = filter(lambda d: "wsgi.input" in d, dicts)
-    else:
-        environs = filter(lambda d: d.get("wsgi.input", None) is rfile, dicts)
+    environs = filter(lambda d: "wsgi.input" in d, dicts)
+    if rfile is not None:
+        logger.log(loglevel, "find_wsgi_environs searching %d environs for rfile", len(environs))
+        environs = filter(lambda d: environ_has_rfile(d, rfile), environs)
     del dicts
     logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
     return environs
