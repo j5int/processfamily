@@ -59,8 +59,10 @@ def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
     objects = gc.get_objects() if objects is None else objects
     logger.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
     dicts = filter(lambda i: isinstance(i, dict), objects)
+    del objects
     logger.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
     environs = filter(lambda d: "wsgi.input" in d, dicts)
+    del dicts
     logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
     return environs
 
@@ -69,18 +71,23 @@ def find_wsgi_environs_by_rfile(rfile, objects=None, loglevel=logging.DEBUG):
     objects = gc.get_objects() if objects is None else objects
     logger.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
     dicts = filter(lambda i: isinstance(i, dict), objects)
+    del objects
     logger.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
     environs = filter(lambda d: d.get("wsgi.input", None) is rfile, dicts)
+    del dicts
     logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
     return environs
 
-def find_thread_frame(thread, objects=None, loglevel=logging.INFO):
+def find_thread_frame(thread, objects=None, error_on_failure=True, loglevel=logging.INFO):
     """Finds the leaf frame for the given thread"""
     thread = find_thread(thread)
     for found_thread, leaf_frame in find_thread_frames():
         if found_thread is thread:
             return leaf_frame
-    raise ValueError("Could not find leaf frame for given thread %s" % thread)
+    if error_on_failure:
+        raise ValueError("Could not find leaf frame for given thread %s" % thread)
+    else:
+        return None
 
 def find_thread_frames(objects=None, loglevel=logging.INFO):
     """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
