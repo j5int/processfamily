@@ -64,6 +64,16 @@ def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
     logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
     return environs
 
+def find_wsgi_environs_by_rfile(rfile, objects=None, loglevel=logging.DEBUG):
+    """Finds any wsgi environs that have the given rfile as wsgi.input"""
+    objects = gc.get_objects() if objects is None else objects
+    logger.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
+    dicts = filter(lambda i: isinstance(i, dict), objects)
+    logger.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
+    environs = filter(lambda d: d.get("wsgi.input", None) is rfile, dicts)
+    logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
+    return environs
+
 def find_thread_frame(thread, objects=None, loglevel=logging.INFO):
     """Finds the leaf frame for the given thread"""
     thread = find_thread(thread)
