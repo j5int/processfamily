@@ -12,6 +12,8 @@ except ImportError:
     # this requires ctypes so might not be available
     ThreadRaise = None
 
+logger = logging.getLogger("j5.OS.ThreadControl")
+
 def get_thread_callstr(thread):
     """returns a string indicating how the given thread was called"""
     try:
@@ -35,22 +37,22 @@ def graceful_stop_thread(thread, thread_wait=0.5):
             try:
                 ThreadRaise.thread_async_raise(thread, SystemExit)
             except Exception, e:
-                logging.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), Errors.traceback_str())
+                logger.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), Errors.traceback_str())
         time.sleep(thread_wait)
     if thread.isAlive():
         return False
     else:
-        logging.info("Thread %s stopped gracefully" % thread.getName())
+        logger.info("Thread %s stopped gracefully" % thread.getName())
         return True
 
 def forceful_stop_thread(thread):
     """stops the given thread forcefully if it is alive"""
     if thread.isAlive():
-        logging.warning("Stopping thread %s forcefully" % thread.getName())
+        logger.warning("Stopping thread %s forcefully" % thread.getName())
         try:
             thread._Thread__stop()
         except Exception, e:
-            logging.warning("Error stopping thread %s: %s" % (thread.getName(), e))
+            logger.warning("Error stopping thread %s: %s" % (thread.getName(), e))
     return not thread.isAlive()
 
 def stop_thread(thread, thread_wait=1.0):
@@ -84,7 +86,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
     for thread in remaining_threads:
         thread_name = thread.getName()
         callstr = get_thread_callstr(thread)
-        logging.warning("Shutting down but thread still remains alive: %s" % (callstr))
+        logger.warning("Shutting down but thread still remains alive: %s" % (callstr))
         threads_to_stop.append(thread)
     if not threads_to_stop:
         return
@@ -95,7 +97,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
             if not graceful_stop_thread(thread, thread_wait):
                 threads_to_stop2.append(thread)
     except KeyboardInterrupt, e:
-        logging.warning("Keyboard Interrupt received while waiting for thread; abandoning civility and forcing them all to stop")
+        logger.warning("Keyboard Interrupt received while waiting for thread; abandoning civility and forcing them all to stop")
         threads_to_stop2 = find_stop_threads()
     for thread in threads_to_stop2:
         forceful_stop_thread(thread)
@@ -105,5 +107,5 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
         time.sleep(thread_wait/5)
     unstoppable_thread_names = [thread.getName() for thread in find_stop_threads()]
     if unstoppable_thread_names:
-        logging.error("The following threads could not be stopped: %s" % ", ".join(unstoppable_thread_names))
+        logger.error("The following threads could not be stopped: %s" % ", ".join(unstoppable_thread_names))
 

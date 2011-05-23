@@ -9,6 +9,8 @@ from j5.OS import ThreadControl
 # TODO: investigate what would happen when not using cherrypy
 from cherrypy import wsgiserver
 
+logger = logging.getLogger("j5.OS.ThreadDebug")
+
 def find_thread(thread):
     """Looks up a thread by thread number and returns the thread object"""
     if isinstance(thread, int):
@@ -27,7 +29,6 @@ def shutdown_thread(thread, force=INCREASING, loglevel=logging.DEBUG):
     """Shuts the given thread (given by Thread object or ident) down, with logging set to the given loglevel, and returns success"""
     thread = find_thread(thread)
     lines = []
-    logger = logging.getLogger("j5.OS")
     previous_loglevel = logger.level
     logger.setLevel(loglevel)
     try:
@@ -55,7 +56,6 @@ def find_wsgi_requests(thread=None):
 
 def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
     """Filters the given objects (or all objects in the system if not given) and returns those that are wsgi environs"""
-    logger = logging.getLogger("j5.OS")
     objects = gc.get_objects() if objects is None else objects
     logger.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
     dicts = filter(lambda i: isinstance(i, dict), objects)
@@ -66,7 +66,6 @@ def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
 
 def find_thread_frames(objects=None, loglevel=logging.INFO):
     """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
-    logger = logging.getLogger("j5.OS")
     objects = gc.get_objects() if objects is None else objects
     # frames = filter(lambda i: isinstance(i, types.FrameType), objects)
     frames = filter(lambda i: 'frame' in repr(type(i)) and hasattr(i, "f_back"), objects)
