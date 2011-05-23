@@ -64,6 +64,14 @@ def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
     logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
     return environs
 
+def find_thread_frame(thread, objects=None, loglevel=logging.INFO):
+    """Finds the leaf frame for the given thread"""
+    thread = find_thread(thread)
+    for found_thread, leaf_frame in find_thread_frames():
+        if found_thread is thread:
+            return leaf_frame
+    raise ValueError("Could not find leaf frame for given thread %s" % thread)
+
 def find_thread_frames(objects=None, loglevel=logging.INFO):
     """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
     objects = gc.get_objects() if objects is None else objects
