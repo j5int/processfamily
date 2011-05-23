@@ -4,6 +4,7 @@
 
 import gc
 import logging
+import sys
 import threading
 from j5.OS import ThreadControl
 # TODO: investigate what would happen when not using cherrypy
@@ -85,7 +86,7 @@ def find_thread_environs(threads=None, objects=None):
         if server or conn or environs:
             yield thread, (server, conn, environs)
 
-def find_thread_frame(thread, objects=None, error_on_failure=True, loglevel=logging.INFO):
+def find_thread_frame(thread, error_on_failure=True, loglevel=logging.INFO):
     """Finds the leaf frame for the given thread"""
     thread = find_thread(thread)
     for found_thread, leaf_frame in find_thread_frames():
@@ -96,26 +97,14 @@ def find_thread_frame(thread, objects=None, error_on_failure=True, loglevel=logg
     else:
         return None
 
-def find_thread_frames(objects=None, loglevel=logging.INFO):
+def find_thread_frames(loglevel=logging.INFO):
     """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
-    objects = gc.get_objects() if objects is None else objects
-    # frames = filter(lambda i: isinstance(i, types.FrameType), objects)
-    frames = filter(lambda i: 'frame' in repr(type(i)) and hasattr(i, "f_back"), objects)
-    logger.log(loglevel, "find_thread_frames found %d frames", len(frames))
-    parent_frames = filter(lambda f: f.f_back is None, frames)
-    logger.log(loglevel, "find_thread_frames found %d parent frames (threads)", len(parent_frames))
-    back_frames = set(map(lambda f: f.f_back, frames))
-    leaf_frames = filter(lambda f: f not in back_frames, frames)
-    logger.log(loglevel, "find_thread_frames found %d leaf frames (threads)", len(leaf_frames))
-    for n, frame in enumerate(leaf_frames):
-        head_frame = frame
-        while head_frame.f_back is not None:
-            head_frame = head_frame.f_back
-        head_locals = head_frame.f_locals
-        if isinstance(head_locals.get('self', None), threading.Thread):
-            found_thread = head_locals['self']
+    leaf_frames = sys._current_frames()
+    threads = dict((t.ident, t) for t in threading.enumerate())
+    for thread_id, frame in leaf_frames.items():
+        if thread_id in threads:
+            yield threads[thread_id], frame
         else:
-            found_thread = None
-        yield found_thread, frame
+            yield None, frame
 
 
