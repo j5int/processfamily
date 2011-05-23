@@ -63,3 +63,26 @@ def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
     logging.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
     return environs
 
+def find_thread_frames(objects=None, loglevel=logging.INFO):
+    """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
+    objects = gc.get_objects() if objects is None else objects
+    # frames = filter(lambda i: isinstance(i, types.FrameType), objects)
+    frames = filter(lambda i: 'frame' in repr(type(i)) and hasattr(i, "f_back"), objects)
+    logging.log(loglevel, "get_tracebacks found %d frames", len(frames))
+    parent_frames = filter(lambda f: f.f_back is None, frames)
+    logging.log(loglevel, "get_tracebacks found %d parent frames (threads)", len(parent_frames))
+    back_frames = set(map(lambda f: f.f_back, frames))
+    leaf_frames = filter(lambda f: f not in back_frames, frames)
+    logging.log(loglevel, "get_tracebacks found %d leaf frames (threads)", len(leaf_frames))
+    for n, frame in enumerate(leaf_frames):
+        head_frame = frame
+        while head_frame.f_back is not None:
+            head_frame = head_frame.f_back
+        head_locals = head_frame.f_locals
+        if isinstance(head_locals.get('self', None), threading.Thread):
+            found_thread = head_locals['self']
+        else:
+            found_thread = None
+        yield found_thread, frame
+
+
