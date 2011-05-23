@@ -57,29 +57,33 @@ def find_wsgi_requests(thread=None):
                     if conn is None or item.conn is conn:
                         yield item
 
-def find_wsgi_environs(objects=None, loglevel=logging.DEBUG):
-    """Filters the given objects (or all objects in the system if not given) and returns those that are wsgi environs"""
+def find_wsgi_environs(rfile=None, objects=None, loglevel=logging.DEBUG):
+    """Filters the given objects (or all objects in the system if not given) and returns those that are wsgi environs, matching rfile if provided"""
     objects = gc.get_objects() if objects is None else objects
     logger.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
     dicts = filter(lambda i: isinstance(i, dict), objects)
     del objects
     logger.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
-    environs = filter(lambda d: "wsgi.input" in d, dicts)
+    if rfile is None:
+        environs = filter(lambda d: "wsgi.input" in d, dicts)
+    else:
+        environs = filter(lambda d: d.get("wsgi.input", None) is rfile, dicts)
     del dicts
     logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
     return environs
 
-def find_wsgi_environs_by_rfile(rfile, objects=None, loglevel=logging.DEBUG):
-    """Finds any wsgi environs that have the given rfile as wsgi.input"""
-    objects = gc.get_objects() if objects is None else objects
-    logger.log(loglevel, "find_wsgi_environs searching %d objects", len(objects))
-    dicts = filter(lambda i: isinstance(i, dict), objects)
-    del objects
-    logger.log(loglevel, "find_wsgi_environs searching %d dicts", len(dicts))
-    environs = filter(lambda d: d.get("wsgi.input", None) is rfile, dicts)
-    del dicts
-    logger.log(loglevel, "find_wsgi_environs found %d wsgi environs", len(environs))
-    return environs
+def find_thread_environs(threads=None, objects=None):
+    """Generates a set of thread, (server, conn, environs) results for active cherrypy threads"""
+    threads = threading.enumerate() if threads is None else threads
+    for thread in threads:
+        server = getattr(thread, "server", None)
+        conn = getattr(thread, "conn", None)
+        if conn:
+            environs = find_wsgi_environs(rfile=conn.rfile, objects=objects)
+        else:
+            environs = []
+        if server or conn or environs:
+            yield thread, (server, conn, environs)
 
 def find_thread_frame(thread, objects=None, error_on_failure=True, loglevel=logging.INFO):
     """Finds the leaf frame for the given thread"""
