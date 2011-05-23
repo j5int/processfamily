@@ -6,7 +6,6 @@ import gc
 import logging
 import sys
 import threading
-from j5.OS import ThreadControl
 # TODO: investigate what would happen when not using cherrypy
 from cherrypy import wsgiserver
 
@@ -24,22 +23,6 @@ def find_thread(thread, error_on_failure=True):
             else:
                 return None
     return thread
-
-GRACEFUL, FORCEFUL, INCREASING = range(3)
-
-STOP_THREAD_METHODS = {GRACEFUL: ThreadControl.graceful_stop_thread, FORCEFUL: ThreadControl.forceful_stop_thread, INCREASING: ThreadControl.stop_thread}
-
-def shutdown_thread(thread, force=INCREASING, loglevel=logging.DEBUG):
-    """Shuts the given thread (given by Thread object or ident) down, with logging set to the given loglevel, and returns success"""
-    thread = find_thread(thread)
-    lines = []
-    previous_loglevel = logger.level
-    logger.setLevel(loglevel)
-    try:
-        result = STOP_THREAD_METHODS[force](thread)
-    finally:
-        logger.setLevel(previous_loglevel)
-    return result
 
 def find_wsgi_requests(thread=None):
     """Finds wsgi requests on the given thread (generator)"""
