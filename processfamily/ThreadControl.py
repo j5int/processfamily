@@ -5,12 +5,17 @@
 from j5.Logging import Errors
 import threading
 import time
+import traceback
 import logging
 try:
     from j5.OS import ThreadRaise
 except ImportError:
     # this requires ctypes so might not be available
     ThreadRaise = None
+try:
+    from j5.OS import ThreadDebug
+except ImportError, thread_debug_error:
+    ThreadDebug = None
 
 logger = logging.getLogger("j5.OS.ThreadControl")
 
@@ -76,7 +81,22 @@ def filter_threads(threads, current_thread=None, exclude_threads=None):
             remaining_threads.remove(exclude_thread)
     return remaining_threads
 
-def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
+def log_thread_tracebacks(threads, stop_event=None, finished_event=None, loglevel=logging.INFO):
+    """Logs tracebacks for the given threads"""
+    logger.log(loglevel, "Preparing to shut down %d threads; generating tracebacks", len(threads))
+    for (thread, frame) in ThreadDebug.find_thread_frames():
+        if thread in threads:
+            logger.log(loglevel, "Preparing to shut down thread %r", thread)
+            logger.log(loglevel, "".join(traceback.format_stack(frame)))
+            if stop_event and stop_event.is_set():
+                logger.log(loglevel, "Told to stop tracebacks; aborting")
+                break
+    else:
+        logger.log(loglevel, "Completed generating tracebacks")
+    if finished_event:
+        finished_event.set()
+
+def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tracebacks=True):
     """enumerates remaining threads and stops them"""
     current_thread = threading.currentThread()
     def find_stop_threads():
@@ -90,6 +110,20 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
         threads_to_stop.append(thread)
     if not threads_to_stop:
         return
+    traceback_stop_event = threading.Event()
+    traceback_finished_event = threading.Event()
+    if log_tracebacks and not ThreadDebug:
+        logger.warning("Cannot log tracebacks as ThreadDebug could not be imported: %s", thread_debug_error)
+        log_tracebacks = False
+    if log_tracebacks:
+        traceback_thread = threading.Thread(target=log_thread_tracebacks, name="stop_thread_tracebacks", args=(threads_to_stop, traceback_stop_event, traceback_finished_event))
+        traceback_thread.start()
+        # wait for the tracebacks to stop, and give them a chance to abort if they take too long
+        logger.info("Started traceback thread")
+        traceback_finished_event.wait(global_wait)
+        traceback_stop_event.set()
+        traceback_finished_event.wait(global_wait)
+        logger.info("Finished waiting for traceback thread")
     threads_to_stop2 = []
     try:
         time.sleep(global_wait)
