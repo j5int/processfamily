@@ -36,3 +36,20 @@ def shutdown_thread(thread, force=INCREASING, loglevel=logging.DEBUG):
         logger.setLevel(previous_loglevel)
     return result
 
+def find_wsgi_requests(thread=None):
+    """Finds wsgi requests on the given thread (generator)"""
+    thread = find_thread(thread) if thread else None
+    lines = []
+    conn = thread.conn if thread else None
+    refs = gc.get_referrers(wsgiserver.HTTPRequest)
+    reqs = []
+    for obj in refs:
+        if isinstance(obj, wsgiserver.HTTPRequest):
+            if conn is None or obj.conn is conn:
+                yield obj
+        elif isinstance(obj, (tuple, list)):
+            for item in obj:
+                if isinstance(item, wsgiserver.HTTPRequest):
+                    if conn is None or item.conn is conn:
+                        yield item
+
