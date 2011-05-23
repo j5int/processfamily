@@ -11,14 +11,17 @@ from cherrypy import wsgiserver
 
 logger = logging.getLogger("j5.OS.ThreadDebug")
 
-def find_thread(thread):
-    """Looks up a thread by thread number and returns the thread object"""
-    if isinstance(thread, int):
+def find_thread(thread, error_on_failure=True):
+    """Looks up a thread by thread number and returns the thread object. If given a thread, return the thread. If not error_on_failure, return None if not found"""
+    if isinstance(thread, (int, long)):
         for t in threading.enumerate():
             if t.ident == thread:
                 return t
         else:
-            raise ValueError("Could not find thread %s" % thread)
+            if error_on_failure:
+                raise ValueError("Could not find thread %s" % thread)
+            else:
+                return None
     return thread
 
 GRACEFUL, FORCEFUL, INCREASING = range(3)
