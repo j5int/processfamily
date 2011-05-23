@@ -42,17 +42,17 @@ def graceful_stop_thread(thread, thread_wait=0.5):
     if thread.isAlive():
         return False
     else:
-        logger.info("Thread %s stopped gracefully" % thread.getName())
+        logger.info("Thread %s stopped gracefully", thread.getName())
         return True
 
 def forceful_stop_thread(thread):
     """stops the given thread forcefully if it is alive"""
     if thread.isAlive():
-        logger.warning("Stopping thread %s forcefully" % thread.getName())
+        logger.warning("Stopping thread %s forcefully", thread.getName())
         try:
             thread._Thread__stop()
         except Exception, e:
-            logger.warning("Error stopping thread %s: %s" % (thread.getName(), e))
+            logger.warning("Error stopping thread %s: %s", thread.getName(), e)
     return not thread.isAlive()
 
 def stop_thread(thread, thread_wait=1.0):
@@ -86,7 +86,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
     for thread in remaining_threads:
         thread_name = thread.getName()
         callstr = get_thread_callstr(thread)
-        logger.warning("Shutting down but thread still remains alive: %s" % (callstr))
+        logger.warning("Shutting down but thread still remains alive: %s", callstr)
         threads_to_stop.append(thread)
     if not threads_to_stop:
         return
@@ -107,5 +107,5 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None):
         time.sleep(thread_wait/5)
     unstoppable_thread_names = [thread.getName() for thread in find_stop_threads()]
     if unstoppable_thread_names:
-        logger.error("The following threads could not be stopped: %s" % ", ".join(unstoppable_thread_names))
+        logger.error("The following threads could not be stopped: %s", ", ".join(unstoppable_thread_names))
 
