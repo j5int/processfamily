@@ -9,6 +9,9 @@ import threading
 # TODO: investigate what would happen when not using cherrypy
 from cherrypy import wsgiserver
 
+if not hasattr(sys, "_current_frames"):
+    raise ImportError("Cannot use ThreadDebug without sys._current_frames")
+
 logger = logging.getLogger("j5.OS.ThreadDebug")
 
 def find_thread(thread, error_on_failure=True):
