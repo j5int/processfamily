@@ -14,7 +14,7 @@ except ImportError:
     ThreadRaise = None
 try:
     from j5.OS import ThreadDebug
-except ImportError, thread_debug_error:
+except ImportError as thread_debug_error:
     ThreadDebug = None
 
 logger = logging.getLogger("j5.OS.ThreadControl")
@@ -31,7 +31,7 @@ def get_thread_callstr(thread):
             thread_name = "%s.%s" % (thread.__class__.__module__, thread.__class__.__name__)
         callargs = ", ".join([repr(arg) for arg in thread_args] + ["%s=%r" % (name, value) for name, value in thread_kwargs.items()])
         return "%s was called with %s(%s)" % (thread.getName(), thread_name, callargs)
-    except Exception, e:
+    except Exception as e:
         return "Could not calculate thread arguments for thread (error %s)" % e
 
 def graceful_stop_thread(thread, thread_wait=0.5):
@@ -41,7 +41,7 @@ def graceful_stop_thread(thread, thread_wait=0.5):
             # this attempts to raise an exception in the thread; the sleep allows the switch or natural end of the thread
             try:
                 ThreadRaise.thread_async_raise(thread, SystemExit)
-            except Exception, e:
+            except Exception as e:
                 logger.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), Errors.traceback_str())
         time.sleep(thread_wait)
     if thread.isAlive():
@@ -56,7 +56,7 @@ def forceful_stop_thread(thread):
         logger.warning("Stopping thread %s forcefully", thread.getName())
         try:
             thread._Thread__stop()
-        except Exception, e:
+        except Exception as e:
             logger.warning("Error stopping thread %s: %s", thread.getName(), e)
     return not thread.isAlive()
 
@@ -130,7 +130,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tra
         for thread in threads_to_stop:
             if not graceful_stop_thread(thread, thread_wait):
                 threads_to_stop2.append(thread)
-    except KeyboardInterrupt, e:
+    except KeyboardInterrupt as e:
         logger.warning("Keyboard Interrupt received while waiting for thread; abandoning civility and forcing them all to stop")
         threads_to_stop2 = find_stop_threads()
     for thread in threads_to_stop2:
