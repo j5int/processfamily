@@ -8,6 +8,7 @@ import sys
 import threading
 # TODO: investigate what would happen when not using cherrypy
 from cherrypy import wsgiserver
+from j5.Web.Server import RequestStack
 
 if not hasattr(sys, "_current_frames"):
     raise ImportError("Cannot use ThreadDebug without sys._current_frames")
@@ -72,19 +73,17 @@ def find_thread_environs(threads=None, objects=None):
     for thread in threads:
         server = getattr(thread, "server", None)
         conn = getattr(thread, "conn", None)
-        if conn:
-            environs = find_wsgi_environs(rfile=conn.rfile, objects=objects)
-        else:
-            environs = []
+        environ = RequestStack.request_stack.get_environ_by_thread_id(thread.ident)
+        environs = [environ] if environ else []
         if server or conn or environs:
             yield thread, (server, conn, environs)
 
-def find_thread_frame(thread, error_on_failure=True, loglevel=logging.INFO):
+def find_thread_frame(thread_id, error_on_failure=True, loglevel=logging.INFO):
     """Finds the leaf frame for the given thread"""
-    thread = find_thread(thread)
-    for found_thread, leaf_frame in find_thread_frames():
-        if found_thread is thread:
-            return leaf_frame
+    leaf_frames = sys._current_frames()
+    for t_id, frame in leaf_frames.items():
+        if thread_id == t_id:
+            return frame
     if error_on_failure:
         raise ValueError("Could not find leaf frame for given thread %s" % thread)
     else:
