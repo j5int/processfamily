@@ -4,6 +4,7 @@
 
 import threading
 import ctypes
+from j5.Control.Admin import ThreadMonitor
 
 def thread_async_raise(thread, exctype):
     """raises the exception, performs cleanup if needed"""
@@ -40,7 +41,7 @@ def get_thread_id(thread):
             return tid
     raise AssertionError("could not determine the thread's id")
 
-class Thread(threading.Thread):
+class Thread(ThreadMonitor.MonitoredThread):
     def _get_my_tid(self):
         """determines this (self's) thread id"""
         return get_thread_id(self)
