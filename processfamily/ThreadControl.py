@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """Utilities for controlling other threads (usually stopping them!)"""
+from j5.Control.Admin import ThreadMonitor
 
 from j5.Logging import Errors
 import threading
@@ -116,7 +117,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tra
         logger.warning("Cannot log tracebacks as ThreadDebug could not be imported: %s", thread_debug_error)
         log_tracebacks = False
     if log_tracebacks:
-        traceback_thread = threading.Thread(target=log_thread_tracebacks, name="stop_thread_tracebacks", args=(threads_to_stop, traceback_stop_event, traceback_finished_event))
+        traceback_thread = ThreadMonitor.MonitoredThread(target=log_thread_tracebacks, name="stop_thread_tracebacks", args=(threads_to_stop, traceback_stop_event, traceback_finished_event))
         traceback_thread.start()
         # wait for the tracebacks to stop, and give them a chance to abort if they take too long
         logger.info("Started traceback thread")

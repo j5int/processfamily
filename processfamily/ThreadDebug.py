@@ -85,7 +85,7 @@ def find_thread_frame(thread_id, error_on_failure=True, loglevel=logging.INFO):
         if thread_id == t_id:
             return frame
     if error_on_failure:
-        raise ValueError("Could not find leaf frame for given thread %s" % thread)
+        raise ValueError("Could not find leaf frame for given thread %s" % thread_id)
     else:
         return None
 
