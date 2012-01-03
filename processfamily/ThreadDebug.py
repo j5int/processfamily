@@ -7,6 +7,7 @@ import logging
 import sys
 import threading
 # TODO: investigate what would happen when not using cherrypy
+import traceback
 from cherrypy import wsgiserver
 from j5.Web.Server import RequestStack
 
@@ -14,6 +15,19 @@ if not hasattr(sys, "_current_frames"):
     raise ImportError("Cannot use ThreadDebug without sys._current_frames")
 
 logger = logging.getLogger("j5.OS.ThreadDebug")
+
+def to_hex(number):
+    """returns a hex representation of a 32-bit number, handling negative numbers as two's complement"""
+    return "0x%08x" % (number & 0xffffffff) if number else "<unknown>"
+
+def from_hex(number_str):
+    """given a decimal string or hex string starting with 0x, returns a 32-bit two's complement number"""
+    if number_str.startswith("0x"):
+        h = int(number_str, 16)
+        s, n = h >> 31, h & 0x7fffffff
+        return n if not s else (-0x80000000 + n)
+    else:
+        return int(number_str)
 
 def find_thread(thread, error_on_failure=True):
     """Looks up a thread by thread number and returns the thread object. If given a thread, return the thread. If not error_on_failure, return None if not found"""
@@ -100,3 +114,22 @@ def find_thread_frames(loglevel=logging.INFO):
             yield None, frame
 
 
+def format_traceback(leaf_frame, include_locals=False):
+    """Generates a traceback from the given leaf frame, including local variable information if specified"""
+    if include_locals:
+        current_frame = leaf_frame
+        current_traceback = []
+        while current_frame is not None:
+            frame_lines = [tbline.rstrip() for tbline in traceback.format_stack(current_frame, 1)]
+            locals = current_frame.f_locals
+            for name in sorted(locals.keys()):
+                value = locals[name]
+                rvalue = repr(value)
+                if len(rvalue) > 20000:
+                    rvalue = "[%d chars; trimmed] %s" % (len(rvalue), rvalue[:20000])
+                frame_lines.append("      %s: %s" % (name, rvalue))
+            current_traceback = frame_lines + current_traceback
+            current_frame = current_frame.f_back
+        return current_traceback
+    else:
+        return [tbline.rstrip() for tbline in traceback.format_stack(leaf_frame)]
