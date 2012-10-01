@@ -1,4 +1,6 @@
-"""raises exceptions in other Python threads asynchronously using ctypes and PyThreadState_SetAsyncExc"""
+"""raises exceptions in other Python threads asynchronously using ctypes and PyThreadState_SetAsyncExc
+
+NB this is dangerous and should only be used during shutdown; it's possible to get locks etc in unsavoury states through using this code"""
 
 # from http://sebulba.wikispaces.com/recipe+thread2
 
