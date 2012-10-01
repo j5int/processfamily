@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
-"""Utilities for controlling other threads (usually stopping them!)"""
+"""Utilities for controlling other threads (usually stopping them!)
+
+NB this is dangerous and should only be used during shutdown; it's possible to get locks etc in unsavoury states through using this code"""
+
 from j5.Control.Admin import ThreadMonitor
 
 from j5.Logging import Errors
