@@ -6,7 +6,7 @@ NB this is dangerous and should only be used during shutdown; it's possible to g
 
 import threading
 import ctypes
-from j5.Control.Admin import ThreadMonitor
+from j5.OS import ThreadMonitor
 
 def thread_async_raise(thread, exctype):
     """raises the exception, performs cleanup if needed"""
