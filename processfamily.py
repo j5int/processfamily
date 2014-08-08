@@ -2,8 +2,22 @@ __author__ = 'matth'
 
 class ChildProcess(object):
 
-    def main(self, args):
-        pass
+    def run(self):
+        """
+        Method representing the thread's activity. You may override this method in a subclass.
+
+        This will be called from the processes main method, after initialising some other stuff.
+        """
+
+    def start(self):
+        """
+        Starts up the the child process.
+
+        You should do this in your child process implementation:
+
+            if __name__ == '__main__':
+                MyChildProcess().start()
+        """
 
     def stop_command(self, timeout):
         """
@@ -28,5 +42,6 @@ class ChildProcess(object):
 
         :param millis
         """
+
 
 
