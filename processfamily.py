@@ -3,6 +3,9 @@ __author__ = 'matth'
 import sys
 import subprocess
 import time
+import uuid
+import logging
+import json
 
 def start_child_process(child_process_instance):
     pass
@@ -70,7 +73,32 @@ class ChildProcessProxy(object):
         """
 
     def send_stop_command(self):
-        self._process_instance.write("STOP\n")
+        self._send_command("stop")
+
+    def _send_command(self, command, initial_timeout, *args, **kwargs):
+        response_id = str(uuid.uuid4())
+        cmd = [command, response_id, initial_timeout] + list(args)
+        if kwargs:
+            cmd.append(json.dumps(kwargs))
+        self._process_instance.stdin.write("%s\n" % " ".join(cmd))
+
+    def handle_sys_err_line(self, line):
+        sys.stderr.writelines([line])
+
+    def _sys_err_thread(self):
+        line = self._process_instance.stderr.readline()
+        while line is not None:
+            self.handle_sys_err_line(line)
+            line = self._process_instance.stderr.readline()
+
+    def _sys_out_thread(self):
+        line = self._process_instance.stdout.readline()
+        while line is not None:
+            self._handle_response_line(line)
+            line = self._process_instance.stdout.readline()
+
+    def _handle_response_line(self, line):
+        pass
 
 
 class ProcessFamily(object):
