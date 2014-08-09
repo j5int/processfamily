@@ -6,9 +6,12 @@ import time
 import uuid
 import logging
 import json
+import argparse
+import shlex
+import os
 
 def start_child_process(child_process_instance):
-    pass
+    _BaseChildProcessHost(child_process_instance)
 
 class ChildProcess(object):
     """
@@ -28,21 +31,11 @@ class ChildProcess(object):
         This will be called from the processes main method, after initialising some other stuff.
         """
 
-    def stop_command(self, timeout):
+    def stop(self, timeout=None):
         """
         Will be called from a new thread. The process should do its best to shutdown cleanly if this is called.
 
         :param timeout The number of milliseconds that the parent process will wait before killing this process.
-        """
-
-    def custom_command(self, command, timeout, **kwargs):
-        """
-        Will be called in a new thread when a custom command is sent from the parent process
-
-        :param command: a string
-        :param timeout: The number of milliseconds that the parent process expects the child to take
-        :param kwargs: custom keyword arguments (parsed from a json string)
-        :return: a json friendly object to return to the parent
         """
 
     def request_more_time(self, millis):
@@ -51,6 +44,29 @@ class ChildProcess(object):
 
         :param millis
         """
+
+class _BaseChildProcessHost(object):
+    def __init__(self, child_process):
+        self.child_process = child_process
+        self.command_arg_parser = argparse.ArgumentParser(description='Processes a command')
+        self.command_arg_parser.add_argument('command', required=True, choices=['stop'])
+        self.command_arg_parser.add_argument('--responseid', '-r', dest='response_id')
+        self.command_arg_parser.add_argument('--timeout', '-t', dest='timeout')
+        self.stdin = sys.stdin
+        sys.stdin = open(os.devnull, 'r')
+        self.stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def _sys_in_thread(self):
+        line = self.stdin.readline()
+        while line is not None:
+            self._handle_command_line(line)
+            line = self.stdin.readline()
+
+    def _handle_command_line(self, line):
+        args = self.command_arg_parser.parse_args(shlex.split(line))
+        if args.command == 'stop':
+            self.child_process.stop()
 
 
 class ChildProcessProxy(object):
@@ -61,26 +77,16 @@ class ChildProcessProxy(object):
     def __init__(self, process_instance):
         self._process_instance = process_instance
 
-    def send_custom_command(self, command, initial_timeout, **kwargs):
-        """
-        send a custom command to the child, and wait for a response (blocking)
-        :param command: a string - the name of the command
-        :param initial_timeout: the initial timeout period (this may be extended by the child process calling request_more_time)
-        :param kwargs: a set of keyword arguments - they should all be json friendly
+    def send_stop_command(self, timeout=None):
+        self._send_command("stop", timeout=timeout)
 
-        :raises This will raise a timeout exception the timeout period is exceeded.
-        :returns an object restored from a json string
-        """
-
-    def send_stop_command(self):
-        self._send_command("stop")
-
-    def _send_command(self, command, initial_timeout, *args, **kwargs):
+    def _send_command(self, command, timeout=None):
         response_id = str(uuid.uuid4())
-        cmd = [command, response_id, initial_timeout] + list(args)
-        if kwargs:
-            cmd.append(json.dumps(kwargs))
+        cmd = [command, '-r', response_id]
+        if timeout is not None:
+            cmd += ['-t', timeout]
         self._process_instance.stdin.write("%s\n" % " ".join(cmd))
+        return response_id
 
     def handle_sys_err_line(self, line):
         sys.stderr.writelines([line])
