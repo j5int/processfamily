@@ -1,6 +1,6 @@
 __author__ = 'matth'
 
-from __init__ import ChildProcess, start_child_process
+from processfamily import ChildProcess, start_child_process
 import threading
 import sys
 

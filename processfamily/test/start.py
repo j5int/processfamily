@@ -1,6 +1,8 @@
+
 __author__ = 'matth'
 
-from processfamily import ProcessFamily, ChildProcessForTests
+from processfamily import ProcessFamily
+from processfamily.test import ChildProcessForTests
 import time
 import sys
 import os
