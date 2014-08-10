@@ -1,4 +1,4 @@
-__author__ = 'Administrator'
+__author__ = 'matth'
 
 from __init__ import ChildProcess, start_child_process
 import threading

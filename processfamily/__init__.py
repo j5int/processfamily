@@ -1,8 +1,7 @@
-import threading
-import traceback
-
 __author__ = 'matth'
 
+import threading
+import traceback
 import sys
 import subprocess
 import time
@@ -105,7 +104,8 @@ class ChildProcessProxy(object):
         self._sys_out_thread.start()
 
     def send_stop_command(self, timeout=None):
-        self._send_command("stop", timeout=timeout)
+        if self._process_instance.poll() is None:
+            self._send_command("stop", timeout=timeout)
 
     def _send_command(self, command, timeout=None):
         response_id = str(uuid.uuid4())
@@ -174,11 +174,3 @@ class ProcessFamily(object):
                 if p._process_instance.poll() is not None:
                     self.child_processes.remove(p)
             time.sleep(0.1)
-
-if __name__ == '__main__':
-    print "Starting"
-    family = ProcessFamily(child_process_module_name='processfamily.ChildProcessForTests', number_of_child_processes=1)
-    family.start()
-    time.sleep(5)
-    family.stop()
-    print "Done"

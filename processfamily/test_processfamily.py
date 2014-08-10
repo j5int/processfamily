@@ -1,4 +1,4 @@
-__author__ = 'Administrator'
+__author__ = 'matth'
 
 import unittest
 import time
