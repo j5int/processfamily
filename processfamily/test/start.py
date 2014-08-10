@@ -2,10 +2,7 @@
 __author__ = 'matth'
 
 from processfamily import ProcessFamily
-from processfamily.test import ChildProcess
 import time
-import sys
-import os
 
 if __name__ == '__main__':
     print "Starting"

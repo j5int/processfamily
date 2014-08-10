@@ -148,7 +148,7 @@ class ProcessFamily(object):
     Manages the launching of a set of child processes
     """
 
-    def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=False):
+    def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=True):
         self.child_process_module_name = child_process_module_name
         self.run_as_script = run_as_script
         self.number_of_child_processes = number_of_child_processes
