@@ -1,4 +1,5 @@
 import threading
+import traceback
 
 __author__ = 'matth'
 
@@ -15,6 +16,14 @@ import os
 def start_child_process(child_process_instance):
     host = _BaseChildProcessHost(child_process_instance)
     host.run()
+
+def _traceback_str():
+    exc_info = sys.exc_info()
+    return "".join(traceback.format_exception(exc_info[0], exc_info[1], exc_info[2]))
+
+def _exception_str():
+    exc_info = sys.exc_info()
+    return "".join(traceback.format_exception_only(exc_info[0], exc_info[1]))
 
 class ChildProcess(object):
     """
@@ -60,7 +69,6 @@ class _BaseChildProcessHost(object):
         self.stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
-        self._sys_in_thread.daemon = True
         self._sys_in_thread.start()
 
     def run(self):
@@ -92,9 +100,7 @@ class ChildProcessProxy(object):
     def __init__(self, process_instance):
         self._process_instance = process_instance
         self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target)
-        self._sys_err_thread.daemon = True
         self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
-        self._sys_out_thread.daemon = True
         self._sys_err_thread.start()
         self._sys_out_thread.start()
 
@@ -110,23 +116,23 @@ class ChildProcessProxy(object):
         return response_id
 
     def handle_sys_err_line(self, line):
-        sys.stderr.writelines([line])
+        sys.stderr.write(line)
 
     def _sys_err_thread_target(self):
         try:
-            line = self._process_instance.stderr.readline()
-            while line is not None:
-                self.handle_sys_err_line(line)
+            while self._process_instance.poll() is None:
                 line = self._process_instance.stderr.readline()
+                if line:
+                    self.handle_sys_err_line(line)
         except Exception as e:
             print e
 
     def _sys_out_thread_target(self):
         try:
-            line = self._process_instance.stdout.readline()
-            while line is not None:
-                self._handle_response_line(line)
+            while self._process_instance.poll() is None:
                 line = self._process_instance.stdout.readline()
+                if line:
+                    self._handle_response_line(line)
         except Exception as e:
             print e
 
