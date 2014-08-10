@@ -2,7 +2,7 @@ __author__ = 'Administrator'
 
 import unittest
 import time
-from processfamily import ProcessFamily
+from __init__ import ProcessFamily
 
 class TestStartStop(unittest.TestCase):
     def test_start_stop_one(self):
