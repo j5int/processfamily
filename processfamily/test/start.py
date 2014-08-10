@@ -7,13 +7,12 @@ import time
 import sys
 import os
 
-class MyProcessFamily(ProcessFamily):
-    def get_child_process_cmd(self):
-        return [sys.executable, os.path.join(os.path.dirname(ChildProcess.__file__), 'ChildProcess.py')]
-
 if __name__ == '__main__':
     print "Starting"
-    family = MyProcessFamily(number_of_child_processes=1)
+    family = ProcessFamily(
+        child_process_module_name='processfamily.test.ChildProcess',
+        number_of_child_processes=1,
+        run_as_script=True)
     family.start()
     time.sleep(5)
     family.stop()

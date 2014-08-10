@@ -1,3 +1,5 @@
+import pkgutil
+
 __author__ = 'matth'
 
 import threading
@@ -146,13 +148,17 @@ class ProcessFamily(object):
     Manages the launching of a set of child processes
     """
 
-    def __init__(self, child_process_module_name=None, number_of_child_processes=None):
+    def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=False):
         self.child_process_module_name = child_process_module_name
+        self.run_as_script = run_as_script
         self.number_of_child_processes = number_of_child_processes
         self.child_processes = []
 
     def get_child_process_cmd(self):
-        return [sys.executable, '-m', self.child_process_module_name]
+        if self.run_as_script:
+            return [sys.executable, self._find_module_filename(self.child_process_module_name)]
+        else:
+            return [sys.executable, '-m', self.child_process_module_name]
 
     def start(self):
         assert not self.child_processes
@@ -174,3 +180,18 @@ class ProcessFamily(object):
                 if p._process_instance.poll() is not None:
                     self.child_processes.remove(p)
             time.sleep(0.1)
+
+    def _find_module_filename(self, modulename):
+        """finds the filename of the module with the given name (supports submodules)"""
+        module_parts = modulename.split(".")
+        search_path = None
+        for i, part in enumerate(module_parts):
+            search_module = ".".join(module_parts[:i+1])
+            try:
+                loader = pkgutil.find_loader(search_module)
+                if loader is None:
+                    raise ImportError(search_module)
+                search_path = loader.get_filename(search_module)
+            except ImportError:
+                raise ValueError("Could not find %s (reached %s at %s)" % (modulename, part, search_path))
+        return search_path
