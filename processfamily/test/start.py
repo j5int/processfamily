@@ -2,14 +2,14 @@
 __author__ = 'matth'
 
 from processfamily import ProcessFamily
-from processfamily.test import ChildProcessForTests
+from processfamily.test import ChildProcess
 import time
 import sys
 import os
 
 class MyProcessFamily(ProcessFamily):
     def get_child_process_cmd(self):
-        return [sys.executable, os.path.join(os.path.dirname(ChildProcessForTests.__file__), 'ChildProcessForTests.py')]
+        return [sys.executable, os.path.join(os.path.dirname(ChildProcess.__file__), 'ChildProcess.py')]
 
 if __name__ == '__main__':
     print "Starting"
