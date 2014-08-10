@@ -2,7 +2,7 @@ __author__ = 'matth'
 
 import unittest
 import time
-from __init__ import ProcessFamily
+from processfamily import ProcessFamily
 
 class TestStartStop(unittest.TestCase):
     def test_start_stop_one(self):
