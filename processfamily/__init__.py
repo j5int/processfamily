@@ -171,7 +171,7 @@ class ProcessFamily(object):
 
 if __name__ == '__main__':
     print "Starting"
-    family = ProcessFamily(child_process_module_name='ChildProcessForTests', number_of_child_processes=1)
+    family = ProcessFamily(child_process_module_name='processfamily.ChildProcessForTests', number_of_child_processes=1)
     family.start()
     time.sleep(5)
     family.stop()
