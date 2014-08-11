@@ -2,7 +2,7 @@ __author__ = 'matth'
 
 from processfamily import ChildProcess, start_child_process
 import threading
-import sys
+import logging
 
 class ChildProcessForTests(ChildProcess):
 
@@ -11,12 +11,12 @@ class ChildProcessForTests(ChildProcess):
 
     def run(self):
         while not self.stop_event.is_set():
-            sys.stderr.write("Child doing stuff\n")
-            self.stop_event.wait(3)
-
+            logging.info("Child doing stuff")
+            self.stop_event.wait(2)
 
     def stop(self, timeout=None):
         self.stop_event.set()
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     start_child_process(ChildProcessForTests())
