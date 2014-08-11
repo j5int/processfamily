@@ -171,13 +171,20 @@ class ChildProcessProxy(object):
         sys.stderr.write(line)
 
     def _sys_err_thread_target(self):
-        try:
-            while self._process_instance.poll() is None:
+        while True:
+            try:
                 line = self._process_instance.stderr.readline()
-                if line:
+                if not line:
+                    break
+                try:
                     self.handle_sys_err_line(line)
-        except Exception as e:
-            print e
+                except Exception as e:
+                    logging.error("Error handling child process stderr output: %s\n%s", e,  _traceback_str())
+            except Exception as e:
+                logging.error("Exception reading stderr output for processfamily: %s\n%s", e,  _traceback_str())
+                # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
+                # so it might get in to a tight loop which I want to avoid
+                time.sleep(1)
 
     def _sys_out_thread_target(self):
         try:
