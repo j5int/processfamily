@@ -148,6 +148,7 @@ class ChildProcessProxy(object):
         self._sys_err_thread.start()
         self._sys_out_thread.start()
         self._rsp_queues = {}
+        self._stdin_lock = threading.RLock()
 
     def send_stop_command(self, timeout=None):
         self._send_command("stop", timeout=timeout, ignore_write_error=True)
@@ -167,7 +168,8 @@ class ChildProcessProxy(object):
         self._rsp_queues[response_id] = Queue.Queue()
         try:
             try:
-                self._process_instance.stdin.write("%s\n" % req)
+                with self._stdin_lock:
+                    self._process_instance.stdin.write("%s\n" % req)
             except Exception as e:
                 if ignore_write_error:
                     return None
