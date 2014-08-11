@@ -65,7 +65,7 @@ class _BaseChildProcessHost(object):
     def __init__(self, child_process):
         self.child_process = child_process
         self.command_arg_parser = _ArgumentParser(description='Execute an RPC method on the child')
-        self.command_arg_parser.add_argument('method', choices=['stop', 'wait_for_start'])
+        self.command_arg_parser.add_argument('method')
         self.command_arg_parser.add_argument('--id', '-i', dest='json_rpc_id')
         self.command_arg_parser.add_argument('--params', '-p', dest='params')
         self.dispatcher = jsonrpc.Dispatcher()
