@@ -14,6 +14,7 @@ import json
 import argparse
 import shlex
 import os
+import jsonrpc
 
 def start_child_process(child_process_instance):
     host = _BaseChildProcessHost(child_process_instance)
@@ -63,16 +64,19 @@ class _ArgumentParser(argparse.ArgumentParser):
 class _BaseChildProcessHost(object):
     def __init__(self, child_process):
         self.child_process = child_process
-        self.command_arg_parser = _ArgumentParser(description='Processes a command')
-        self.command_arg_parser.add_argument('command', choices=['stop'])
-        self.command_arg_parser.add_argument('--responseid', '-r', dest='response_id')
-        self.command_arg_parser.add_argument('--timeout', '-t', dest='timeout')
+        self.command_arg_parser = _ArgumentParser(description='Execute an RPC method on the child')
+        self.command_arg_parser.add_argument('method', choices=['stop'])
+        self.command_arg_parser.add_argument('--id', '-i', dest='json_rpc_id')
+        self.command_arg_parser.add_argument('--params', '-p', dest='params')
+        self.dispatcher = jsonrpc.Dispatcher()
+        self.dispatcher["stop"] = self._stop
         self.stdin = sys.stdin
         sys.stdin = open(os.devnull, 'r')
         self.stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
         self._sys_in_thread.start()
+        self._should_stop = False
 
     def run(self):
         self.child_process.run()
@@ -83,18 +87,53 @@ class _BaseChildProcessHost(object):
                 line = self.stdin.readline()
                 if not line:
                     break
-                if not self._handle_command_line(line):
+                try:
+                    rsp = self._handle_command_line(line)
+                    if rsp:
+                        assert not '\n' in rsp
+                        self.stdout.write("%s\n"%rsp)
+                except Exception as e:
+                    logging.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
+                if self._should_stop:
                     break
             except Exception as e:
-                logging.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
+                logging.error("Exception reading input for processfamily: %s\n%s", e,  _traceback_str())
+                # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
+                # so it might get in to a tight loop which I want to avoid
+                time.sleep(1)
 
+    def _stop(self):
+        self._should_stop = True
+        self.child_process.stop()
+        return 0
 
     def _handle_command_line(self, line):
-        args = self.command_arg_parser.parse_args(shlex.split(line))
-        if args.command == 'stop':
-            self.child_process.stop()
-            return False
-        return True
+        try:
+            line = line.strip()
+            if not line.startswith('{'):
+                args = self.command_arg_parser.parse_args(shlex.split(line))
+                request = {
+                    'jsonrpc': '2.0',
+                    'method': args.method,
+                }
+                if args.json_rpc_id:
+                    request['id'] = args.json_rpc_id
+                if args.params:
+                    request['params'] = args.params
+                line = json.dumps(request)
+        except Exception as e:
+            logging.error("Error parsing command string: %s\n%s", e, _traceback_str())
+            return '{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}'
+
+        try:
+            rsp = jsonrpc.JSONRPCResponseManager.handle(line, self.dispatcher)
+            if rsp:
+                return rsp.json
+            else:
+                return None
+        except Exception as e:
+            logging.error("Error handling command string: %s\n%s", e, _traceback_str())
+            return '{"jsonrpc": "2.0", "error": {"code": 32603, "message": "Error handling request"}, "id": null}'
 
 
 class ChildProcessProxy(object):
@@ -114,6 +153,7 @@ class ChildProcessProxy(object):
             self._send_command("stop", timeout=timeout)
 
     def _send_command(self, command, timeout=None):
+
         response_id = str(uuid.uuid4())
         cmd = [command, '-r', response_id]
         if timeout is not None:
