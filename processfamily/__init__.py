@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pkgutil
 
 __author__ = 'matth'
@@ -51,11 +52,18 @@ class ChildProcess(object):
         :param timeout The number of milliseconds that the parent process will wait before killing this process.
         """
 
+class _ArgumentParser(argparse.ArgumentParser):
+
+    def exit(self, status=0, message=None):
+        pass
+
+    def error(self, message):
+        raise ValueError(message)
 
 class _BaseChildProcessHost(object):
     def __init__(self, child_process):
         self.child_process = child_process
-        self.command_arg_parser = argparse.ArgumentParser(description='Processes a command')
+        self.command_arg_parser = _ArgumentParser(description='Processes a command')
         self.command_arg_parser.add_argument('command', choices=['stop'])
         self.command_arg_parser.add_argument('--responseid', '-r', dest='response_id')
         self.command_arg_parser.add_argument('--timeout', '-t', dest='timeout')
@@ -70,14 +78,16 @@ class _BaseChildProcessHost(object):
         self.child_process.run()
 
     def _sys_in_thread_target(self):
-        try:
-            line = self.stdin.readline()
-            while line is not None:
+        while True:
+            try:
+                line = self.stdin.readline()
+                if not line:
+                    break
                 if not self._handle_command_line(line):
                     break
-                line = self.stdin.readline()
-        except Exception as e:
-            sys.stderr.write("%s\n" % e)
+            except Exception as e:
+                logging.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
+
 
     def _handle_command_line(self, line):
         args = self.command_arg_parser.parse_args(shlex.split(line))
