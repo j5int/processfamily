@@ -51,12 +51,6 @@ class ChildProcess(object):
         :param timeout The number of milliseconds that the parent process will wait before killing this process.
         """
 
-    def request_more_time(self, millis):
-        """
-        During the processing of a command (including the stop command), call this method to request more time.
-
-        :param millis
-        """
 
 class _BaseChildProcessHost(object):
     def __init__(self, child_process):
