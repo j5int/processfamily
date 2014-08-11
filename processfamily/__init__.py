@@ -161,7 +161,10 @@ class ChildProcessProxy(object):
         }
         if params is not None:
             cmd["params"] = params
-        self._process_instance.stdin.write("%s\n" % json.dumps(cmd))
+
+        req = json.dumps(cmd)
+        assert not '\n' in req
+        self._process_instance.stdin.write("%s\n" % req)
         return response_id
 
     def handle_sys_err_line(self, line):
