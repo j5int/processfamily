@@ -65,21 +65,29 @@ class _BaseChildProcessHost(object):
     def __init__(self, child_process):
         self.child_process = child_process
         self.command_arg_parser = _ArgumentParser(description='Execute an RPC method on the child')
-        self.command_arg_parser.add_argument('method', choices=['stop'])
+        self.command_arg_parser.add_argument('method', choices=['stop', 'wait_for_start'])
         self.command_arg_parser.add_argument('--id', '-i', dest='json_rpc_id')
         self.command_arg_parser.add_argument('--params', '-p', dest='params')
         self.dispatcher = jsonrpc.Dispatcher()
         self.dispatcher["stop"] = self._stop
+        self.dispatcher["wait_for_start"] = self._wait_for_start
         self.stdin = sys.stdin
         sys.stdin = open(os.devnull, 'r')
         self.stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
+        self._stdout_lock = threading.RLock()
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
         self._sys_in_thread.start()
         self._should_stop = False
+        self._started_event = threading.Event()
 
     def run(self):
+        self._started_event.set()
         self.child_process.run()
+
+    def _wait_for_start(self):
+        self._started_event.wait()
+        return 0
 
     def _sys_in_thread_target(self):
         while True:
@@ -88,10 +96,7 @@ class _BaseChildProcessHost(object):
                 if not line:
                     break
                 try:
-                    rsp = self._handle_command_line(line)
-                    if rsp:
-                        assert not '\n' in rsp
-                        self.stdout.write("%s\n"%rsp)
+                    self._handle_command_line(line)
                 except Exception as e:
                     logging.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
                 if self._should_stop:
@@ -107,6 +112,12 @@ class _BaseChildProcessHost(object):
         self.child_process.stop()
         return 0
 
+    def _send_response(self, rsp):
+        if rsp:
+            assert not '\n' in rsp
+            with self._stdout_lock:
+                self.stdout.write("%s\n"%rsp)
+
     def _handle_command_line(self, line):
         try:
             line = line.strip()
@@ -121,19 +132,29 @@ class _BaseChildProcessHost(object):
                 if args.params:
                     request['params'] = args.params
                 line = json.dumps(request)
+            else:
+                request = json.loads(line)
+            request_id = json.dumps(request.get("id"))
         except Exception as e:
             logging.error("Error parsing command string: %s\n%s", e, _traceback_str())
-            return '{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}'
+            self._send_response('{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}')
+            return
 
+        if request.get('method') == 'stop':
+            #I have to process the stop method in this thread!
+            self._dispatch_rpc_call(line, request_id)
+        else:
+            #Others should be processed from a new thread:
+            threading.Thread(target=self._dispatch_rpc_call, args=(line, request_id)).start()
+
+    def _dispatch_rpc_call(self, line, request_id):
         try:
             rsp = jsonrpc.JSONRPCResponseManager.handle(line, self.dispatcher)
             if rsp:
-                return rsp.json
-            else:
-                return None
+                self._send_response(rsp.json)
         except Exception as e:
             logging.error("Error handling command string: %s\n%s", e, _traceback_str())
-            return '{"jsonrpc": "2.0", "error": {"code": 32603, "message": "Error handling request"}, "id": null}'
+            self._send_response('{"jsonrpc": "2.0", "error": {"code": 32603, "message": "Error handling request"}, "id": %s}'%request_id)
 
 
 class ChildProcessProxy(object):
