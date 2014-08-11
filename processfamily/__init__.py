@@ -174,6 +174,9 @@ class ChildProcessProxy(object):
     def send_stop_command(self, timeout=None):
         self._send_command("stop", timeout=timeout, ignore_write_error=True)
 
+    def wait_for_start_event(self, timeout=None):
+        self._send_command("wait_for_start", timeout=timeout)
+
     def _send_command(self, command, timeout=None, params=None, ignore_write_error=False):
         response_id = str(uuid.uuid4())
         cmd = {
@@ -269,6 +272,9 @@ class ProcessFamily(object):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
             self.child_processes.append(ChildProcessProxy(p))
+
+        for p in self.child_processes:
+            p.wait_for_start_event()
 
     def stop(self):
         for p in self.child_processes:
