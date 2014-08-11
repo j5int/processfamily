@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import pkgutil
-
 __author__ = 'matth'
 
 import threading
@@ -15,6 +13,8 @@ import argparse
 import shlex
 import os
 import jsonrpc
+import Queue
+import pkgutil
 
 def start_child_process(child_process_instance):
     host = _BaseChildProcessHost(child_process_instance)
@@ -147,12 +147,12 @@ class ChildProcessProxy(object):
         self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
         self._sys_err_thread.start()
         self._sys_out_thread.start()
+        self._rsp_queues = {}
 
     def send_stop_command(self, timeout=None):
-        if self._process_instance.poll() is None:
-            self._send_command("stop", timeout=timeout)
+        self._send_command("stop", timeout=timeout, ignore_write_error=True)
 
-    def _send_command(self, command, timeout=None, params=None):
+    def _send_command(self, command, timeout=None, params=None, ignore_write_error=False):
         response_id = str(uuid.uuid4())
         cmd = {
             "method": command,
@@ -164,8 +164,17 @@ class ChildProcessProxy(object):
 
         req = json.dumps(cmd)
         assert not '\n' in req
-        self._process_instance.stdin.write("%s\n" % req)
-        return response_id
+        self._rsp_queues[response_id] = Queue.Queue()
+        try:
+            try:
+                self._process_instance.stdin.write("%s\n" % req)
+            except Exception as e:
+                if ignore_write_error:
+                    return None
+                raise
+            return self._rsp_queues[response_id].get(True, timeout)
+        finally:
+            del self._rsp_queues[response_id]
 
     def handle_sys_err_line(self, line):
         sys.stderr.write(line)
@@ -187,17 +196,27 @@ class ChildProcessProxy(object):
                 time.sleep(1)
 
     def _sys_out_thread_target(self):
-        try:
-            while self._process_instance.poll() is None:
+        while True:
+            try:
                 line = self._process_instance.stdout.readline()
-                if line:
+                if not line:
+                    break
+                try:
                     self._handle_response_line(line)
-        except Exception as e:
-            print e
-
+                except Exception as e:
+                    logging.error("Error handling child process stdout output: %s\n%s", e,  _traceback_str())
+            except Exception as e:
+                logging.error("Exception reading stdout output for processfamily: %s\n%s", e,  _traceback_str())
+                # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
+                # so it might get in to a tight loop which I want to avoid
+                time.sleep(1)
 
     def _handle_response_line(self, line):
-        pass
+        rsp = json.loads(line)
+        if "id" in rsp:
+            rsp_queue = self._rsp_queues.get(rsp["id"], None)
+            if rsp_queue is not None:
+                rsp_queue.put_nowait(rsp)
 
 
 class ProcessFamily(object):
