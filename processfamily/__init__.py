@@ -152,13 +152,16 @@ class ChildProcessProxy(object):
         if self._process_instance.poll() is None:
             self._send_command("stop", timeout=timeout)
 
-    def _send_command(self, command, timeout=None):
-
+    def _send_command(self, command, timeout=None, params=None):
         response_id = str(uuid.uuid4())
-        cmd = [command, '-r', response_id]
-        if timeout is not None:
-            cmd += ['-t', timeout]
-        self._process_instance.stdin.write("%s\n" % " ".join(cmd))
+        cmd = {
+            "method": command,
+            "id": response_id,
+            "jsonrpc": "2.0"
+        }
+        if params is not None:
+            cmd["params"] = params
+        self._process_instance.stdin.write("%s\n" % json.dumps(cmd))
         return response_id
 
     def handle_sys_err_line(self, line):
