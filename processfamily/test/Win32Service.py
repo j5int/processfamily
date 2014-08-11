@@ -52,23 +52,7 @@ def usage():
     print "                 the specified period."
     sys.exit(1)
 
-def HandleCommandLine(argv=None):
-    if argv is None: argv = sys.argv
-
-    if len(argv)<=1:
-        usage()
-
-    # Pull apart the command line
-    import getopt
-    try:
-        opts, args = getopt.getopt(argv[1:], ["password=","username=","startup=","perfmonini=", "perfmondll=", "interactive", "wait="])
-    except getopt.error, details:
-        print details
-        usage()
-
-    if len(args)<1:
-        usage()
-
+def HandleCommandLine():
     win32serviceutil.HandleCommandLine(ProcessFamilyTestService, serviceClassString='processfamily.test.Win32Service.ProcessFamilyTestService')
 
 if __name__ == '__main__':
