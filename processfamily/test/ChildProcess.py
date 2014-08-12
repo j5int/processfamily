@@ -1,8 +1,11 @@
 __author__ = 'matth'
 
-from processfamily import ChildProcess, start_child_process
+from processfamily import ChildProcess, start_child_process, ProcessFamily
 import logging
 import BaseHTTPServer
+import argparse
+import os
+from processfamily.test import Config
 
 class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
@@ -32,14 +35,37 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 class ChildProcessForTests(ChildProcess):
 
-    def __init__(self):
-        self.httpd = BaseHTTPServer.HTTPServer(("", 9081), MyHTTPRequestHandler)
+    def init(self):
+        arg_parser = argparse.ArgumentParser(description='ChildProcessForTests')
+        arg_parser.add_argument('child_number', type=int)
+        arg_parser.add_argument('port', type=int)
+        arg_parser.add_argument('--cpu_number', type=int)
+        args = arg_parser.parse_args()
+        self.child_number = args.child_number
+        self.httpd = BaseHTTPServer.HTTPServer(("", args.port), MyHTTPRequestHandler)
 
     def run(self):
         self.httpd.serve_forever()
 
     def stop(self, timeout=None):
         self.httpd.shutdown()
+
+class ProcessFamilyForTests(ProcessFamily):
+    def __init__(self, number_of_child_processes=None, run_as_script=True):
+        super(ProcessFamilyForTests, self).__init__(
+            child_process_module_name='processfamily.test.ChildProcess',
+            number_of_child_processes=number_of_child_processes,
+            run_as_script=run_as_script)
+
+    def get_child_process_cmd(self, child_number):
+        return super(ProcessFamilyForTests, self).get_child_process_cmd(child_number) + [
+            str(child_number),
+            str(self.get_port_nr(child_number))]
+
+    def get_port_nr(self, child_number):
+        return Config.get_starting_port_nr() + child_number + 1
+
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)

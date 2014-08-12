@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
 __author__ = 'matth'
 
-from processfamily import ProcessFamily
+from processfamily.test import ChildProcess
 import time
 import logging
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting")
-    family = ProcessFamily(
-        child_process_module_name='processfamily.test.ChildProcess',
-        number_of_child_processes=1,
-        run_as_script=True)
+    family = ChildProcess.ProcessFamilyForTests(number_of_child_processes=1)
     family.start()
     time.sleep(5)
     family.stop()

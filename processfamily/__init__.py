@@ -39,6 +39,12 @@ class ChildProcess(object):
 
     """
 
+    def init(self):
+        """
+        Do any initialisation. The parent will wait for this to be complete before considering the process to be
+        running.
+        """
+
     def run(self):
         """
         Method representing the thread's activity. You may override this method in a subclass.
@@ -77,11 +83,13 @@ class _BaseChildProcessHost(object):
         sys.stdout = open(os.devnull, 'w')
         self._stdout_lock = threading.RLock()
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
+        self._sys_in_thread.daemon = True
         self._sys_in_thread.start()
         self._should_stop = False
         self._started_event = threading.Event()
 
     def run(self):
+        self.child_process.init()
         self._started_event.set()
         self.child_process.run()
 
@@ -256,7 +264,7 @@ class ProcessFamily(object):
         self.number_of_child_processes = number_of_child_processes
         self.child_processes = []
 
-    def get_child_process_cmd(self):
+    def get_child_process_cmd(self, child_number):
         if self.run_as_script:
             return [sys.executable, self._find_module_filename(self.child_process_module_name)]
         else:
@@ -267,7 +275,7 @@ class ProcessFamily(object):
         self.child_processes = []
         for i in range(self.number_of_child_processes):
             p = subprocess.Popen(
-                    self.get_child_process_cmd(),
+                    self.get_child_process_cmd(i),
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
