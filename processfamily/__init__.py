@@ -244,6 +244,7 @@ class ChildProcessProxy(object):
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(1)
+        logging.info("Subprocess terminated")
 
     def _handle_response_line(self, line):
         rsp = json.loads(line)
