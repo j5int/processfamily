@@ -8,6 +8,7 @@ import sys
 import threading
 import ctypes
 import thread
+import os
 
 def crash():
     """
@@ -36,6 +37,8 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             threading.Timer(0.5, self.funkyserver.stop).start()
         if self.path.startswith('/interrupt'):
             threading.Timer(0.5, thread.interrupt_main).start()
+        if self.path.startswith('/exit'):
+            threading.Timer(0.5, os._exit, args=[1]).start()
 
 
 
