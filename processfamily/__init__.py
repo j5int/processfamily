@@ -74,6 +74,8 @@ class _BaseChildProcessHost(object):
         self.command_arg_parser.add_argument('method')
         self.command_arg_parser.add_argument('--id', '-i', dest='json_rpc_id')
         self.command_arg_parser.add_argument('--params', '-p', dest='params')
+        self._should_stop = False
+        self._started_event = threading.Event()
         self.dispatcher = jsonrpc.Dispatcher()
         self.dispatcher["stop"] = self._stop
         self.dispatcher["wait_for_start"] = self._wait_for_start
@@ -85,8 +87,6 @@ class _BaseChildProcessHost(object):
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
         self._sys_in_thread.daemon = True
         self._sys_in_thread.start()
-        self._should_stop = False
-        self._started_event = threading.Event()
 
     def run(self):
         self.child_process.init()
@@ -287,7 +287,8 @@ class ProcessFamily(object):
 
     def stop(self):
         for p in self.child_processes:
-            p.send_stop_command()
+            if p._process_instance.poll() is None:
+                p.send_stop_command()
 
         while self.child_processes:
             for p in list(self.child_processes):
