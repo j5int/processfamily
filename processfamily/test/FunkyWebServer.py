@@ -7,6 +7,7 @@ import logging
 import sys
 import threading
 import ctypes
+import thread
 
 def crash():
     """
@@ -33,6 +34,10 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             threading.Timer(0.5, crash).start()
         if self.path.startswith('/stop'):
             threading.Timer(0.5, self.funkyserver.stop).start()
+        if self.path.startswith('/interrupt'):
+            threading.Timer(0.5, thread.interrupt_main).start()
+
+
 
     def do_HEAD(self):
         """Serve a HEAD request."""
