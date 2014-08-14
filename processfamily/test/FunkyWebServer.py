@@ -4,21 +4,43 @@ import BaseHTTPServer
 import argparse
 from processfamily.test import Config
 import logging
+import sys
+import threading
+import ctypes
+
+def crash():
+    """
+    crash the Python interpreter...
+    """
+    i = ctypes.c_char('a')
+    j = ctypes.pointer(i)
+    c = 0
+    while True:
+        j[c] = 'a'
+        c += 1
+    j
 
 class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+
+    funkyserver = None
 
     def do_GET(self):
         """Serve a GET request."""
         t = self.get_response_text()
         self.send_head(t)
         self.wfile.write(t)
+        if self.path.startswith('/crash'):
+            threading.Timer(0.5, crash).start()
+        if self.path.startswith('/stop'):
+            threading.Timer(0.5, self.funkyserver.stop).start()
 
     def do_HEAD(self):
         """Serve a HEAD request."""
         self.send_head(self.get_response_text())
 
     def get_response_text(self):
-        return u"Hello World".encode("UTF-8")
+
+        return u"OK".encode("UTF-8")
 
     def send_head(self, content):
         """Common code for GET and HEAD commands.
@@ -42,7 +64,7 @@ class FunkyWebServer(object):
         self.num_children = args.num_children or 1
         port = Config.get_starting_port_nr() + self.process_number
         logging.info("Process %d listening on port %d", self.process_number, port)
-
+        MyHTTPRequestHandler.funkyserver = self
         self.httpd = BaseHTTPServer.HTTPServer(("", port), MyHTTPRequestHandler)
 
 
