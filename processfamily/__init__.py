@@ -187,8 +187,8 @@ class ChildProcessProxy(object):
         self._rsp_queues = {}
         self._stdin_lock = threading.RLock()
 
-    def send_stop_command(self, timeout=None):
-        self._send_command("stop", timeout=timeout, ignore_write_error=True, wait_for_response=True)
+    def send_stop_command(self):
+        self._send_command("stop", timeout=None, ignore_write_error=True, wait_for_response=False)
 
     def wait_for_start_event(self, timeout=None):
         self._send_command("wait_for_start", timeout=timeout)
