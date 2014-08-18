@@ -11,17 +11,49 @@ import threading
 import time
 import traceback
 import logging
-try:
-    from j5.OS import ThreadRaise
-except ImportError:
-    # this requires ctypes so might not be available
-    ThreadRaise = None
+import ctypes
 try:
     from j5.OS import ThreadDebug
 except ImportError as thread_debug_error:
     ThreadDebug = None
 
 logger = logging.getLogger("j5.OS.ThreadControl")
+
+
+def thread_async_raise(thread, exctype):
+    """raises the exception, performs cleanup if needed"""
+    # if not inspect.isclass(exctype):
+    #     raise TypeError("Only types can be raised (not instances)")
+    if isinstance(thread, threading.Thread):
+        tid = get_thread_id(thread)
+    else:
+        tid = thread
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), ctypes.py_object(exctype))
+    if res == 0:
+        if tid in threading._active:
+            raise ValueError("valid thread id, but setting exception failed")
+        raise ValueError("invalid thread id")
+    elif res != 1:
+        # """if it returns a number greater than one, you're in trouble,
+        # and you should call it again with exc=NULL to revert the effect"""
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
+        raise SystemError("PyThreadState_SetAsyncExc failed")
+
+def get_thread_id(thread):
+    if not thread.isAlive():
+        raise threading.ThreadError("the thread is not active")
+    # Is it defined on the thread object?
+    if hasattr(thread, "ident"):
+        return thread.ident
+    # do we have it cached?
+    if hasattr(thread, "_thread_id"):
+        return thread._thread_id
+    # no, look for it in the _active dict
+    for tid, tobj in threading._active.items():
+        if tobj is thread:
+            thread._thread_id = tid
+            return tid
+    raise AssertionError("could not determine the thread's id")
 
 def get_thread_callstr(thread):
     """returns a string indicating how the given thread was called"""
@@ -41,12 +73,11 @@ def get_thread_callstr(thread):
 def graceful_stop_thread(thread, thread_wait=0.5):
     """try to stop the given thread gracefully if it is still alive. Returns success"""
     if thread.isAlive():
-        if ThreadRaise is not None:
-            # this attempts to raise an exception in the thread; the sleep allows the switch or natural end of the thread
-            try:
-                ThreadRaise.thread_async_raise(thread, SystemExit)
-            except Exception as e:
-                logger.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), Errors.traceback_str())
+        # this attempts to raise an exception in the thread; the sleep allows the switch or natural end of the thread
+        try:
+            thread_async_raise(thread, SystemExit)
+        except Exception as e:
+            logger.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), Errors.traceback_str())
         time.sleep(thread_wait)
     if thread.isAlive():
         return False
