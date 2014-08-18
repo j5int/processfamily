@@ -3,8 +3,8 @@ __author__ = 'matth'
 
 from processfamily import ProcessFamily
 from processfamily.test.FunkyWebServer import FunkyWebServer
-import time
 import logging
+from processfamily.threads import stop_threads
 
 class ProcessFamilyForTests(ProcessFamily):
     def __init__(self, number_of_child_processes=None, run_as_script=True):
@@ -20,15 +20,18 @@ class ProcessFamilyForTests(ProcessFamily):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting")
-    server = FunkyWebServer()
-    family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
-    family.start()
     try:
+        server = FunkyWebServer()
+        family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
+        family.start()
         try:
-            server.run()
-        except KeyboardInterrupt:
-            pass
+            try:
+                server.run()
+            except KeyboardInterrupt:
+                pass
+        finally:
+            family.stop(timeout=10)
     finally:
-        family.stop()
+        stop_threads()
 
     logging.info("Done")

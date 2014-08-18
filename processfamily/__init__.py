@@ -15,6 +15,7 @@ import os
 import jsonrpc
 import Queue
 import pkgutil
+from processfamily.threads import stop_threads
 
 def start_child_process(child_process_instance):
     host = _BaseChildProcessHost(child_process_instance)
@@ -27,6 +28,9 @@ def _traceback_str():
 def _exception_str():
     exc_info = sys.exc_info()
     return "".join(traceback.format_exception_only(exc_info[0], exc_info[1]))
+
+class TimeoutException(Exception):
+    pass
 
 class ChildProcess(object):
     """
@@ -85,7 +89,6 @@ class _BaseChildProcessHost(object):
         sys.stdout = open(os.devnull, 'w')
         self._stdout_lock = threading.RLock()
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
-        self._sys_in_thread.daemon = True
         self._sys_in_thread.start()
 
     def run(self):
@@ -108,7 +111,9 @@ class _BaseChildProcessHost(object):
                 except Exception as e:
                     logging.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
                 if self._should_stop:
-                    break
+                    logging.info("Stopping other threads")
+                    stop_threads()
+                    return
             except Exception as e:
                 logging.error("Exception reading input for processfamily: %s\n%s", e,  _traceback_str())
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
@@ -117,6 +122,7 @@ class _BaseChildProcessHost(object):
 
     def _stop(self):
         self._should_stop = True
+        logging.info("Received stop instruction")
         self.child_process.stop()
         return 0
 
@@ -124,7 +130,9 @@ class _BaseChildProcessHost(object):
         if rsp:
             assert not '\n' in rsp
             with self._stdout_lock:
+                logging.info("Sending response")
                 self.stdout.write("%s\n"%rsp)
+                self.stdout.flush()
 
     def _handle_command_line(self, line):
         try:
@@ -158,7 +166,7 @@ class _BaseChildProcessHost(object):
     def _dispatch_rpc_call(self, line, request_id):
         try:
             rsp = jsonrpc.JSONRPCResponseManager.handle(line, self.dispatcher)
-            if rsp:
+            if rsp is not None:
                 self._send_response(rsp.json)
         except Exception as e:
             logging.error("Error handling command string: %s\n%s", e, _traceback_str())
@@ -180,12 +188,12 @@ class ChildProcessProxy(object):
         self._stdin_lock = threading.RLock()
 
     def send_stop_command(self, timeout=None):
-        self._send_command("stop", timeout=timeout, ignore_write_error=True)
+        self._send_command("stop", timeout=timeout, ignore_write_error=True, wait_for_response=True)
 
     def wait_for_start_event(self, timeout=None):
         self._send_command("wait_for_start", timeout=timeout)
 
-    def _send_command(self, command, timeout=None, params=None, ignore_write_error=False):
+    def _send_command(self, command, timeout=None, params=None, ignore_write_error=False, wait_for_response=True):
         response_id = str(uuid.uuid4())
         cmd = {
             "method": command,
@@ -206,7 +214,10 @@ class ChildProcessProxy(object):
                 if ignore_write_error:
                     return None
                 raise
-            return self._rsp_queues[response_id].get(True, timeout)
+            if wait_for_response:
+                return self._rsp_queues[response_id].get(True, timeout)
+            else:
+                return None
         finally:
             del self._rsp_queues[response_id]
 
@@ -285,13 +296,16 @@ class ProcessFamily(object):
         for p in self.child_processes:
             p.wait_for_start_event()
 
-    def stop(self):
+    def stop(self, timeout=None):
+        start_time = time.time()
         for p in self.child_processes:
             if p._process_instance.poll() is None:
                 p.send_stop_command()
 
         while self.child_processes:
             for p in list(self.child_processes):
+                if timeout is not None and time.time() - start_time > timeout:
+                    raise TimeoutException("Timed out waiting for child processes to stop")
                 if p._process_instance.poll() is not None:
                     self.child_processes.remove(p)
             time.sleep(0.1)
