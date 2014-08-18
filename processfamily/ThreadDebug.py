@@ -10,6 +10,7 @@ import threading
 import traceback
 from cherrypy import wsgiserver
 from j5.Web.Server import RequestStack
+from processfamily.threads import find_thread_frames
 
 if not hasattr(sys, "_current_frames"):
     raise ImportError("Cannot use ThreadDebug without sys._current_frames")
@@ -102,17 +103,6 @@ def find_thread_frame(thread_id, error_on_failure=True, loglevel=logging.INFO):
         raise ValueError("Could not find leaf frame for given thread %s" % thread_id)
     else:
         return None
-
-def find_thread_frames(loglevel=logging.INFO):
-    """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
-    leaf_frames = sys._current_frames()
-    threads = dict((t.ident, t) for t in threading.enumerate())
-    for thread_id, frame in leaf_frames.items():
-        if thread_id in threads:
-            yield threads[thread_id], frame
-        else:
-            yield None, frame
-
 
 def format_traceback(leaf_frame, include_locals=False):
     """Generates a traceback from the given leaf frame, including local variable information if specified"""

@@ -12,10 +12,7 @@ import time
 import traceback
 import logging
 import ctypes
-try:
-    from j5.OS import ThreadDebug
-except ImportError as thread_debug_error:
-    ThreadDebug = None
+import sys
 
 logger = logging.getLogger("j5.OS.ThreadControl")
 
@@ -54,6 +51,16 @@ def get_thread_id(thread):
             thread._thread_id = tid
             return tid
     raise AssertionError("could not determine the thread's id")
+
+def find_thread_frames(loglevel=logging.INFO):
+    """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
+    leaf_frames = sys._current_frames()
+    threads = dict((t.ident, t) for t in threading.enumerate())
+    for thread_id, frame in leaf_frames.items():
+        if thread_id in threads:
+            yield threads[thread_id], frame
+        else:
+            yield None, frame
 
 def get_thread_callstr(thread):
     """returns a string indicating how the given thread was called"""
@@ -119,7 +126,7 @@ def filter_threads(threads, current_thread=None, exclude_threads=None):
 def log_thread_tracebacks(threads, stop_event=None, finished_event=None, loglevel=logging.INFO):
     """Logs tracebacks for the given threads"""
     logger.log(loglevel, "Preparing to shut down %d threads; generating tracebacks", len(threads))
-    for (thread, frame) in ThreadDebug.find_thread_frames():
+    for (thread, frame) in find_thread_frames():
         if thread in threads:
             logger.log(loglevel, "Preparing to shut down thread %r", thread)
             logger.log(loglevel, "".join(traceback.format_stack(frame)))
@@ -147,9 +154,6 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tra
         return
     traceback_stop_event = threading.Event()
     traceback_finished_event = threading.Event()
-    if log_tracebacks and not ThreadDebug:
-        logger.warning("Cannot log tracebacks as ThreadDebug could not be imported: %s", thread_debug_error)
-        log_tracebacks = False
     if log_tracebacks:
         traceback_thread = ThreadMonitor.MonitoredThread(target=log_thread_tracebacks, name="stop_thread_tracebacks", args=(threads_to_stop, traceback_stop_event, traceback_finished_event))
         traceback_thread.start()
