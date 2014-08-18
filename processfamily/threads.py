@@ -4,9 +4,6 @@
 
 NB this is dangerous and should only be used during shutdown; it's possible to get locks etc in unsavoury states through using this code"""
 
-from j5.OS import ThreadMonitor
-
-from j5.Logging import Errors
 import threading
 import time
 import traceback
@@ -14,8 +11,11 @@ import logging
 import ctypes
 import sys
 
-logger = logging.getLogger("j5.OS.ThreadControl")
+logger = logging.getLogger("processfamily.threads")
 
+def _traceback_str():
+    exc_info = sys.exc_info()
+    return "".join(traceback.format_exception(exc_info[0], exc_info[1], exc_info[2]))
 
 def thread_async_raise(thread, exctype):
     """raises the exception, performs cleanup if needed"""
@@ -84,7 +84,7 @@ def graceful_stop_thread(thread, thread_wait=0.5):
         try:
             thread_async_raise(thread, SystemExit)
         except Exception as e:
-            logger.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), Errors.traceback_str())
+            logger.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), _traceback_str())
         time.sleep(thread_wait)
     if thread.isAlive():
         return False
@@ -155,7 +155,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tra
     traceback_stop_event = threading.Event()
     traceback_finished_event = threading.Event()
     if log_tracebacks:
-        traceback_thread = ThreadMonitor.MonitoredThread(target=log_thread_tracebacks, name="stop_thread_tracebacks", args=(threads_to_stop, traceback_stop_event, traceback_finished_event))
+        traceback_thread = threading.Thread(target=log_thread_tracebacks, name="stop_thread_tracebacks", args=(threads_to_stop, traceback_stop_event, traceback_finished_event))
         traceback_thread.start()
         # wait for the tracebacks to stop, and give them a chance to abort if they take too long
         logger.info("Started traceback thread")
