@@ -8,6 +8,9 @@ import threading
 import thread
 import os
 from types import CodeType
+import json
+import win32job
+import win32api
 
 def crash():
     """
@@ -41,7 +44,12 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.send_head(self.get_response_text())
 
     def get_response_text(self):
+        if self.path.startswith('/injob'):
+            return json.dumps(win32job.IsProcessInJob(win32api.GetCurrentProcess(), None), indent=3)
+        if self.path.startswith('/job'):
+            extended_info = win32job.QueryInformationJobObject(None, win32job.JobObjectExtendedLimitInformation)
 
+            return json.dumps(extended_info, indent=3)
         return u"OK".encode("UTF-8")
 
     def send_head(self, content):
@@ -63,7 +71,7 @@ class FunkyWebServer(object):
         arg_parser.add_argument('--num_children', type=int)
         args = arg_parser.parse_args()
         self.process_number = args.process_number or 0
-        self.num_children = args.num_children or 1
+        self.num_children = args.num_children or 3
         port = Config.get_starting_port_nr() + self.process_number
         logging.info("Process %d listening on port %d", self.process_number, port)
         MyHTTPRequestHandler.funkyserver = self

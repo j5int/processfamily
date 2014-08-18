@@ -9,6 +9,11 @@ import win32event
 import win32evtlogutil
 import os, sys, string, time
 import servicemanager
+from processfamily import ProcessFamily
+from processfamily.test.FunkyWebServer import FunkyWebServer
+from processfamily.test.ParentProcess import ProcessFamilyForTests
+import logging
+from processfamily.threads import stop_threads
 
 class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
     _svc_name_ = "ProcessFamilyTest"
@@ -17,18 +22,28 @@ class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
 
     def __init__(self, args):
         win32serviceutil.ServiceFramework.__init__(self, args)
-        self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
 
     def SvcStop(self):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         servicemanager.LogInfoMsg("ProcessFamilyTest stopping ..." )
-        win32event.SetEvent(self.hWaitStop)
+        self.server.stop()
 
     def SvcDoRun(self):
         servicemanager.LogInfoMsg("ProcessFamilyTest starting up ..." )
-
-        servicemanager.LogInfoMsg("ProcessFamilyTest started")
-        win32event.WaitForSingleObject(self.hWaitStop, win32event.INFINITE)
+        try:
+            self.server = FunkyWebServer()
+            family = ProcessFamilyForTests(number_of_child_processes=self.server.num_children)
+            family.start()
+            servicemanager.LogInfoMsg("ProcessFamilyTest started")
+            try:
+                try:
+                    self.server.run()
+                except KeyboardInterrupt:
+                    logging.info("Stopping...")
+            finally:
+                family.stop(timeout=10)
+        finally:
+            stop_threads()
         servicemanager.LogInfoMsg("ProcessFamilyTest stopped" )
 
 def usage():
