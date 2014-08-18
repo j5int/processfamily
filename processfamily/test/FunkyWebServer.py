@@ -4,23 +4,17 @@ import BaseHTTPServer
 import argparse
 from processfamily.test import Config
 import logging
-import sys
 import threading
-import ctypes
 import thread
 import os
+from types import CodeType
 
 def crash():
     """
     crash the Python interpreter...
+    see https://wiki.python.org/moin/CrashingPython
     """
-    i = ctypes.c_char('a')
-    j = ctypes.pointer(i)
-    c = 0
-    while True:
-        j[c] = 'a'
-        c += 1
-    j
+    exec CodeType(0, 5, 8, 0, "hello moshe", (), (), (), "", "", 0, "")
 
 class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
