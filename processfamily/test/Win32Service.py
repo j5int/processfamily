@@ -15,6 +15,13 @@ from processfamily.test.ParentProcess import ProcessFamilyForTests
 import logging
 from processfamily.threads import stop_threads
 
+
+class ProcessFamilyForWin32ServiceTests(ProcessFamilyForTests):
+
+    def get_sys_executable(self):
+        return "c:\\Python27\\pythonw.exe"
+
+
 class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
     _svc_name_ = "ProcessFamilyTest"
     _svc_display_name_ = "Process Family Test Service"
@@ -32,7 +39,7 @@ class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
         servicemanager.LogInfoMsg("ProcessFamilyTest starting up ..." )
         try:
             self.server = FunkyWebServer()
-            family = ProcessFamilyForTests(number_of_child_processes=self.server.num_children)
+            family = ProcessFamilyForWin32ServiceTests(number_of_child_processes=self.server.num_children)
             family.start()
             servicemanager.LogInfoMsg("ProcessFamilyTest started")
             try:
