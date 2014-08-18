@@ -78,10 +78,10 @@ class _BaseChildProcessHost(object):
         self.command_arg_parser.add_argument('method')
         self.command_arg_parser.add_argument('--id', '-i', dest='json_rpc_id')
         self.command_arg_parser.add_argument('--params', '-p', dest='params')
-        self._should_stop = False
         self._started_event = threading.Event()
+        self._stopped_event = threading.Event()
         self.dispatcher = jsonrpc.Dispatcher()
-        self.dispatcher["stop"] = self._stop
+        self.dispatcher["stop"] = self._respond_immediately_for_stop
         self.dispatcher["wait_for_start"] = self._wait_for_start
         self.stdin = sys.stdin
         sys.stdin = open(os.devnull, 'r')
@@ -89,41 +89,50 @@ class _BaseChildProcessHost(object):
         sys.stdout = open(os.devnull, 'w')
         self._stdout_lock = threading.RLock()
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
-        self._sys_in_thread.start()
+        self._sys_in_thread.setDaemon(True)
 
     def run(self):
+        #This is in the main thread
+        self._sys_in_thread.start()
         self.child_process.init()
         self._started_event.set()
         self.child_process.run()
+        self._stopped_event.set()
 
     def _wait_for_start(self):
         self._started_event.wait()
         return 0
 
     def _sys_in_thread_target(self):
-        while True:
+        should_continue = True
+        while should_continue:
             try:
                 line = self.stdin.readline()
                 if not line:
-                    break
-                try:
-                    self._handle_command_line(line)
-                except Exception as e:
-                    logging.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
-                if self._should_stop:
-                    logging.info("Stopping other threads")
-                    stop_threads()
-                    return
+                    should_continue = False
+                else:
+                    try:
+                        should_continue = self._handle_command_line(line)
+                    except Exception as e:
+                        logging.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
             except Exception as e:
                 logging.error("Exception reading input for processfamily: %s\n%s", e,  _traceback_str())
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(1)
+        self._started_event.wait(1)
+        threading.Thread(target=self._stop_thread_target).start()
+        self._stopped_event.wait(3)
+        stop_threads()
 
-    def _stop(self):
-        self._should_stop = True
+    def _stop_thread_target(self):
+        try:
+            self.child_process.stop()
+        except Exception as e:
+            logging.error("Error handling processfamily stop command: %s\n%s", e,  _traceback_str())
+
+    def _respond_immediately_for_stop(self):
         logging.info("Received stop instruction")
-        self.child_process.stop()
         return 0
 
     def _send_response(self, rsp):
@@ -154,14 +163,19 @@ class _BaseChildProcessHost(object):
         except Exception as e:
             logging.error("Error parsing command string: %s\n%s", e, _traceback_str())
             self._send_response('{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}')
-            return
+            return True
 
         if request.get('method') == 'stop':
             #I have to process the stop method in this thread!
+
+            #This is a bit lame - but I'm just using this to form a valid response and send it immediately
+            #
             self._dispatch_rpc_call(line, request_id)
+            return False
         else:
             #Others should be processed from a new thread:
             threading.Thread(target=self._dispatch_rpc_call, args=(line, request_id)).start()
+            return True
 
     def _dispatch_rpc_call(self, line, request_id):
         try:
@@ -188,7 +202,7 @@ class ChildProcessProxy(object):
         self._stdin_lock = threading.RLock()
 
     def send_stop_command(self):
-        self._send_command("stop", timeout=None, ignore_write_error=True, wait_for_response=False)
+        self._send_command("stop", timeout=None, ignore_write_error=True, wait_for_response=True)
 
     def wait_for_start_event(self, timeout=None):
         self._send_command("wait_for_start", timeout=timeout)
@@ -256,6 +270,11 @@ class ChildProcessProxy(object):
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(1)
         logging.info("Subprocess terminated")
+        #Unstick any waiting command threads:
+        while self._rsp_queues:
+            for q in self._rsp_queues.values():
+                if q.empty():
+                    q.put_nowait(None)
 
     def _handle_response_line(self, line):
         rsp = json.loads(line)
@@ -297,11 +316,13 @@ class ProcessFamily(object):
             p.wait_for_start_event()
 
     def stop(self, timeout=None):
+        logging.info("Sending stop commands")
         start_time = time.time()
         for p in self.child_processes:
             if p._process_instance.poll() is None:
                 p.send_stop_command()
 
+        logging.info("Waiting for child processes to terminate")
         while self.child_processes:
             for p in list(self.child_processes):
                 if timeout is not None and time.time() - start_time > timeout:

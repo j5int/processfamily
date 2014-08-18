@@ -28,7 +28,7 @@ if __name__ == '__main__':
             try:
                 server.run()
             except KeyboardInterrupt:
-                pass
+                logging.info("Stopping...")
         finally:
             family.stop(timeout=10)
     finally:
