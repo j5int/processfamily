@@ -9,8 +9,11 @@ import thread
 import os
 from types import CodeType
 import json
-import win32job
-import win32api
+import sys
+
+if sys.platform == 'win32':
+    import win32job
+    import win32api
 
 def crash():
     """

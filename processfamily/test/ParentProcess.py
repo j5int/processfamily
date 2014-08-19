@@ -5,6 +5,10 @@ from processfamily import ProcessFamily
 from processfamily.test.FunkyWebServer import FunkyWebServer
 import logging
 from processfamily.threads import stop_threads
+import sys
+if sys.platform == 'win32':
+    import win32job
+    import win32api
 
 class ProcessFamilyForTests(ProcessFamily):
     def __init__(self, number_of_child_processes=None, run_as_script=True):
@@ -21,15 +25,13 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting")
     try:
-
-        import win32job
-        import win32api
-        if not win32job.IsProcessInJob(win32api.GetCurrentProcess(), None):
-            hJob = win32job.CreateJobObject(None, "")
-            extended_info = win32job.QueryInformationJobObject(hJob, win32job.JobObjectExtendedLimitInformation)
-            extended_info['BasicLimitInformation']['LimitFlags'] = win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-            win32job.SetInformationJobObject(hJob, win32job.JobObjectExtendedLimitInformation, extended_info)
-            win32job.AssignProcessToJobObject(hJob, win32api.GetCurrentProcess())
+        if sys.platform == 'win32':
+            if not win32job.IsProcessInJob(win32api.GetCurrentProcess(), None):
+                hJob = win32job.CreateJobObject(None, "")
+                extended_info = win32job.QueryInformationJobObject(hJob, win32job.JobObjectExtendedLimitInformation)
+                extended_info['BasicLimitInformation']['LimitFlags'] = win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+                win32job.SetInformationJobObject(hJob, win32job.JobObjectExtendedLimitInformation, extended_info)
+                win32job.AssignProcessToJobObject(hJob, win32api.GetCurrentProcess())
 
         server = FunkyWebServer()
         family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
