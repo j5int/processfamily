@@ -297,9 +297,12 @@ class ProcessFamily(object):
 
     def get_child_process_cmd(self, child_number):
         if self.run_as_script:
-            return [sys.executable, self._find_module_filename(self.child_process_module_name)]
+            return [self.get_sys_executable(), self._find_module_filename(self.child_process_module_name)]
         else:
-            return [sys.executable, '-m', self.child_process_module_name]
+            return [self.get_sys_executable(), '-m', self.child_process_module_name]
+
+    def get_sys_executable(self):
+        return sys.executable
 
     def start(self):
         assert not self.child_processes

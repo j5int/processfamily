@@ -6,9 +6,11 @@ from processfamily.test.FunkyWebServer import FunkyWebServer
 import logging
 from processfamily.threads import stop_threads
 import sys
+import uuid
 if sys.platform == 'win32':
     import win32job
     import win32api
+    import win32security
 
 class ProcessFamilyForTests(ProcessFamily):
     def __init__(self, number_of_child_processes=None, run_as_script=True):
@@ -27,7 +29,9 @@ if __name__ == '__main__':
     try:
         if sys.platform == 'win32':
             if not win32job.IsProcessInJob(win32api.GetCurrentProcess(), None):
-                hJob = win32job.CreateJobObject(None, "")
+                security_attrs = win32security.SECURITY_ATTRIBUTES()
+                security_attrs.bInheritHandle = 0
+                hJob = win32job.CreateJobObject(security_attrs, "j5_%s" % (str(uuid.uuid4())))
                 extended_info = win32job.QueryInformationJobObject(hJob, win32job.JobObjectExtendedLimitInformation)
                 extended_info['BasicLimitInformation']['LimitFlags'] = win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
                 win32job.SetInformationJobObject(hJob, win32job.JobObjectExtendedLimitInformation, extended_info)
