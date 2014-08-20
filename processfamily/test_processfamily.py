@@ -114,6 +114,13 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         self.kill_parent()
 
+    def test_parent_exit_child_locked_up(self):
+        self.start_up()
+        self.send_middle_child_http_command("hold_gil_%d" % (60*10)) #Freeze up for 10 minutes
+        time.sleep(0.7) #Sleep to give it time to take effect
+        #Now try and exit
+        self.send_parent_http_command("exit")
+
     def check_server_ports_unbound(self):
         for pnumber in range(4):
             port = Config.get_starting_port_nr() + pnumber
