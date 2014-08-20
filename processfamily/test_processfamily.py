@@ -82,13 +82,21 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def get_pid_files(self):
         return glob.glob(os.path.join(self.pid_dir, "*.pid"))
 
-    def test_start_stop1(self):
+    def test_start_stop(self):
         self.start_up()
         self.send_parent_http_command("stop")
 
-    def test_start_stop2(self):
+    def test_start_exit(self):
         self.start_up()
-        self.send_parent_http_command("stop")
+        self.send_parent_http_command("exit")
+
+    def test_start_crash(self):
+        self.start_up()
+        self.send_parent_http_command("crash")
+
+    def test_start_interrupt(self):
+        self.start_up()
+        self.send_parent_http_command("interrupt")
 
     def check_server_ports_unbound(self):
         for pnumber in range(4):
