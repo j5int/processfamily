@@ -42,6 +42,20 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
             os.remove(pid_file)
 
         self.start_parent_process()
+        #Wait up to 10 secs for the parent port to be available:
+        start_time = time.time()
+        while time.time() - start_time < 10:
+            try:
+                s = socket.socket()
+                try:
+                    s.connect(("localhost", Config.get_starting_port_nr()))
+                    break
+                except socket.error, e:
+                    pass
+            finally:
+                s.close()
+            time.sleep(0.3)
+
 
     def tearDown(self):
         self.wait_for_parent_to_stop(5)
@@ -68,11 +82,9 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         return glob.glob(os.path.join(self.pid_dir, "*.pid"))
 
     def test_start_stop1(self):
-        time.sleep(5)
         self.send_parent_http_command("stop")
 
     def test_start_stop2(self):
-        time.sleep(5)
         self.send_parent_http_command("stop")
 
     def check_server_ports_unbound(self):
