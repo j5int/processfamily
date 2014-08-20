@@ -109,6 +109,8 @@ class _BaseChildProcessHost(object):
             try:
                 line = self.stdin.readline()
                 if not line:
+                    #TODO: in the code review - Please consider whether this is correct
+                    #i.e. should we shut everything down when this happens?
                     should_continue = False
                 else:
                     try:

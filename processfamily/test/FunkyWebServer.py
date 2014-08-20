@@ -10,6 +10,7 @@ import os
 from types import CodeType
 import json
 import sys
+import ctypes
 
 if sys.platform.startswith('win'):
     import win32job
@@ -21,6 +22,28 @@ def crash():
     see https://wiki.python.org/moin/CrashingPython
     """
     exec CodeType(0, 5, 8, 0, "hello moshe", (), (), (), "", "", 0, "")
+
+if sys.platform.startswith('win'):
+    def hold_gil(timeout):
+        #Using a PyDLL here instead of a WinDLL causes the GIL to be acquired:
+        kernel32 = ctypes.PyDLL('kernel32.dll')
+        try:
+            logging.info("Stealing GIL for %ss", timeout)
+            kernel32.Sleep(timeout*1000)
+            logging.info("Released GIL")
+        except ValueError as e:
+            #This happens because it does some sneaky checking of things at the end of the
+            #function call and notices that it has been tricked in to using the wrong calling convention
+            #(because we are using PyDLL instead of WinDLL)
+            #See http://python.net/crew/theller/ctypes/tutorial.html#calling-functions
+            pass
+else:
+    def hold_gil(timeout):
+        #Using a PyDLL here instead of a CDLL causes the GIL to be acquired:
+        libc = ctypes.PyDLL('libc.so.6')
+        logging.info("Stealing GIL for %ss", timeout)
+        libc.sleep(timeout)
+        logging.info("Released GIL")
 
 class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
@@ -35,10 +58,13 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             threading.Timer(0.5, crash).start()
         if self.path.startswith('/stop'):
             threading.Timer(0.5, self.funkyserver.stop).start()
-        if self.path.startswith('/interrupt'):
+        if self.path.startswith('/interrupt_main'):
             threading.Timer(0.5, thread.interrupt_main).start()
         if self.path.startswith('/exit'):
             threading.Timer(0.5, os._exit, args=[1]).start()
+        if self.path.startswith('/hold_gil_'):
+            t = int(self.path.split('_')[-1])
+            threading.Timer(0.5, hold_gil, args=[t]).start()
 
     def do_HEAD(self):
         """Serve a HEAD request."""

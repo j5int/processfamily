@@ -45,12 +45,16 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.wait_for_parent_to_stop(5)
 
         #Now check that no processes are left over:
+        start_time = time.time()
         processes_left_running = []
         for pid_file in self.get_pid_files():
             with open(pid_file, "r") as f:
                 pid = f.read().strip()
-            if pid and process_exists(int(pid)):
-                processes_left_running.append(int(pid))
+            if pid:
+                while process_exists(int(pid)) and time.time() - start_time < 5:
+                    time.sleep(0.3)
+                if process_exists(int(pid)):
+                    processes_left_running.append(int(pid))
             os.remove(pid_file)
         for pid in processes_left_running:
             try:
@@ -82,21 +86,33 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def get_pid_files(self):
         return glob.glob(os.path.join(self.pid_dir, "*.pid"))
 
-    def test_start_stop(self):
+    def kill_parent(self):
+        for pid_file in self.get_pid_files():
+            if os.path.basename(pid_file).startswith('c'):
+                continue
+            with open(pid_file, "r") as f:
+                pid = f.read().strip()
+            kill_process(int(pid))
+
+    def test_parent_stop(self):
         self.start_up()
         self.send_parent_http_command("stop")
 
-    def test_start_exit(self):
+    def test_parent_exit(self):
         self.start_up()
         self.send_parent_http_command("exit")
 
-    def test_start_crash(self):
+    def test_parent_crash(self):
         self.start_up()
         self.send_parent_http_command("crash")
 
-    def test_start_interrupt(self):
+    def test_parent_interrupt_main(self):
         self.start_up()
-        self.send_parent_http_command("interrupt")
+        self.send_parent_http_command("interrupt_main")
+
+    def test_parent_kill(self):
+        self.start_up()
+        self.kill_parent()
 
     def check_server_ports_unbound(self):
         for pnumber in range(4):
@@ -118,6 +134,9 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def send_parent_http_command(self, command):
         return self.send_http_command(Config.get_starting_port_nr(), command)
+
+    def send_middle_child_http_command(self, command):
+        return self.send_http_command(Config.get_starting_port_nr()+2, command)
 
     def send_http_command(self, port, command):
         r = requests.get('http://localhost:%d/%s' % (port, command))
