@@ -7,6 +7,8 @@ import os
 import subprocess
 import requests
 import time
+import socket
+import logging
 
 class TestStartStop(unittest.TestCase):
     def test_start_stop_one(self):
@@ -20,9 +22,24 @@ class TestStartStop(unittest.TestCase):
         family.stop()
 
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
-    def test_start_stop(self):
+    def test_start_stop1(self):
         time.sleep(5)
         self.send_parent_http_command("stop")
+
+    def test_start_stop2(self):
+        time.sleep(5)
+        self.send_parent_http_command("stop")
+
+    def check_server_ports_unbound(self):
+        for pnumber in range(4):
+            port = Config.get_starting_port_nr() + pnumber
+            #I just try and bind to the server port and see if I have a problem:
+            logging.info("Checking for ability to bind to port %d", port)
+            serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                serversocket.bind(("", port))
+            finally:
+                serversocket.close()
 
     def get_path_to_ParentProcessPy(self):
         return os.path.join(os.path.dirname(__file__), 'test', 'ParentProcess.py')
@@ -37,13 +54,14 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
 class NormalSubprocessServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
     def setUp(self):
+        self.check_server_ports_unbound()
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
             close_fds=True)
 
     def tearDown(self):
         self.parent_process.wait()
-
+        self.check_server_ports_unbound()
 
 
 
