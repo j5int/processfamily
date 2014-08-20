@@ -27,8 +27,6 @@ class TestStartStop(unittest.TestCase):
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def setUp(self):
-        self.check_server_ports_unbound()
-
         self.pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'pid')
         if not os.path.exists(self.pid_dir):
             os.makedirs(self.pid_dir)
@@ -37,9 +35,11 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                 pid = f.read().strip()
             if pid and process_exists(int(pid)):
                 logging.warning(
-                    "Process with pid %s is stilling running. This could be a problem " + \
-                    "(but it might be a new process with a recycled pid so I'm not killing it)." % pid )
-            os.remove(pid_file)
+                    ("Process with pid %s is stilling running. This could be a problem " + \
+                    "(but it might be a new process with a recycled pid so I'm not killing it).") % pid )
+            else:
+                os.remove(pid_file)
+        self.check_server_ports_unbound()
 
     def tearDown(self):
         self.wait_for_parent_to_stop(5)
