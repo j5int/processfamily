@@ -22,6 +22,19 @@ class TestStartStop(unittest.TestCase):
         family.stop()
 
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
+
+    def setUp(self):
+        pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'pid')
+        if not os.path.exists(pid_dir):
+            os.makedirs(pid_dir)
+        self.check_server_ports_unbound()
+        self.start_parent_process()
+
+    def tearDown(self):
+        self.wait_for_parent_to_stop()
+        self.check_server_ports_unbound()
+
+
     def test_start_stop1(self):
         time.sleep(5)
         self.send_parent_http_command("stop")
@@ -57,18 +70,14 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
 
 class NormalSubprocessServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
-    def setUp(self):
-        pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'pid')
-        if not os.path.exists(pid_dir):
-            os.makedirs(pid_dir)
-        self.check_server_ports_unbound()
+
+    def start_parent_process(self):
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
             close_fds=True)
 
-    def tearDown(self):
+    def wait_for_parent_to_stop(self):
         self.parent_process.wait()
-        self.check_server_ports_unbound()
 
 
 
