@@ -11,7 +11,7 @@ from types import CodeType
 import json
 import sys
 
-if sys.platform == 'win32':
+if sys.platform.startswith('win'):
     import win32job
     import win32api
 

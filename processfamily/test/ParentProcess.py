@@ -14,7 +14,7 @@ import logging
 from processfamily.threads import stop_threads
 import sys
 import uuid
-if sys.platform == 'win32':
+if sys.platform.startswith('win'):
     import win32job
     import win32api
     import win32security
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     try:
         server = FunkyWebServer()
 
-        if sys.platform == 'win32':
+        if sys.platform.startswith('win'):
             if not win32job.IsProcessInJob(win32api.GetCurrentProcess(), None):
                 security_attrs = win32security.SECURITY_ATTRIBUTES()
                 security_attrs.bInheritHandle = 0

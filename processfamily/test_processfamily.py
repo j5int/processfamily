@@ -37,6 +37,10 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
             logging.info("Checking for ability to bind to port %d", port)
             serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
+                if not sys.platform.startswith('win'):
+                    #On linux I need this setting cos we are starting and stopping things
+                    #so frequently that they are still in a STOP_WAIT state when I get here
+                    serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 serversocket.bind(("", port))
             finally:
                 serversocket.close()
@@ -54,6 +58,9 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
 class NormalSubprocessServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
     def setUp(self):
+        pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'pid')
+        if not os.path.exists(pid_dir):
+            os.makedirs(pid_dir)
         self.check_server_ports_unbound()
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
