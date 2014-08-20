@@ -40,20 +40,24 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         if self.path.startswith('/exit'):
             threading.Timer(0.5, os._exit, args=[1]).start()
 
-
-
     def do_HEAD(self):
         """Serve a HEAD request."""
         self.send_head(self.get_response_text())
 
     def get_response_text(self):
+        return self._to_json_rsp(self.get_response_object())
+
+    def get_response_object(self):
         if self.path.startswith('/injob'):
             return json.dumps(win32job.IsProcessInJob(win32api.GetCurrentProcess(), None), indent=3)
         if self.path.startswith('/job'):
             extended_info = win32job.QueryInformationJobObject(None, win32job.JobObjectExtendedLimitInformation)
 
             return json.dumps(extended_info, indent=3)
-        return u"OK".encode("UTF-8")
+        return "OK"
+
+    def _to_json_rsp(self, o):
+        return json.dumps(o, indent=3, encoding='UTF-8')
 
     def send_head(self, content):
         """Common code for GET and HEAD commands.
@@ -62,7 +66,7 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         """
         self.send_response(200)
-        self.send_header("Content-type", "text/plain; charset=utf-8")
+        self.send_header("Content-type", "application/json; charset=utf-8")
         self.send_header("Content-Length", len(content))
         self.end_headers()
 
