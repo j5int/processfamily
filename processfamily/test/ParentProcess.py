@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 __author__ = 'matth'
 
+import os
+if __name__ == '__main__':
+    pid = os.getpid()
+    pid_filename = os.path.join(os.path.dirname(__file__), 'pid', 'p%s.pid' % pid)
+    with open(pid_filename, "w") as pid_f:
+        pid_f.write("%s\n" % pid)
+
 from processfamily import ProcessFamily
 from processfamily.test.FunkyWebServer import FunkyWebServer
 import logging
@@ -27,6 +34,8 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting")
     try:
+        server = FunkyWebServer()
+
         if sys.platform == 'win32':
             if not win32job.IsProcessInJob(win32api.GetCurrentProcess(), None):
                 security_attrs = win32security.SECURITY_ATTRIBUTES()
@@ -37,7 +46,6 @@ if __name__ == '__main__':
                 win32job.SetInformationJobObject(hJob, win32job.JobObjectExtendedLimitInformation, extended_info)
                 win32job.AssignProcessToJobObject(hJob, win32api.GetCurrentProcess())
 
-        server = FunkyWebServer()
         family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
         family.start()
         try:
