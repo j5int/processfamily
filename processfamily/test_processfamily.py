@@ -9,6 +9,9 @@ import requests
 import time
 import socket
 import logging
+import glob
+from processfamily.processes import process_exists, kill_process
+from processfamily import _traceback_str
 
 class TestStartStop(unittest.TestCase):
     def test_start_stop_one(self):
@@ -24,16 +27,45 @@ class TestStartStop(unittest.TestCase):
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def setUp(self):
-        pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'pid')
-        if not os.path.exists(pid_dir):
-            os.makedirs(pid_dir)
         self.check_server_ports_unbound()
+
+        self.pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'pid')
+        if not os.path.exists(self.pid_dir):
+            os.makedirs(self.pid_dir)
+        for pid_file in self.get_pid_files():
+            with open(pid_file, "r") as f:
+                pid = f.read().strip()
+            if pid and process_exists(int(pid)):
+                logging.warning(
+                    "Process with pid %s is stilling running. This could be a problem " + \
+                    "(but it might be a new process with a recycled pid so I'm not killing it)." % pid )
+            os.remove(pid_file)
+
         self.start_parent_process()
 
     def tearDown(self):
-        self.wait_for_parent_to_stop()
+        self.wait_for_parent_to_stop(5)
+
+        #Now check that no processes are left over:
+        processes_left_running = []
+        for pid_file in self.get_pid_files():
+            with open(pid_file, "r") as f:
+                pid = f.read().strip()
+            if pid and process_exists(int(pid)):
+                processes_left_running.append(int(pid))
+            os.remove(pid_file)
+        for pid in processes_left_running:
+            try:
+                kill_process(pid)
+            except Exception as e:
+                logging.warning("Error killing process with pid %d: %s", pid, _traceback_str())
+
+        self.assertFalse(processes_left_running, msg="There should be no PIDs left running but there are: %s" % (', '.join([str(p) for p in processes_left_running])))
+
         self.check_server_ports_unbound()
 
+    def get_pid_files(self):
+        return glob.glob(os.path.join(self.pid_dir, "*.pid"))
 
     def test_start_stop1(self):
         time.sleep(5)
@@ -76,8 +108,11 @@ class NormalSubprocessServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
             [sys.executable, self.get_path_to_ParentProcessPy()],
             close_fds=True)
 
-    def wait_for_parent_to_stop(self):
-        self.parent_process.wait()
+    def wait_for_parent_to_stop(self, timeout):
+        start_time = time.time()
+        while time.time()-start_time < timeout:
+            if self.parent_process.poll() is None:
+                time.sleep(0.3)
 
 
 
