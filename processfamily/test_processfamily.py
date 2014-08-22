@@ -265,6 +265,15 @@ if sys.platform.startswith('win'):
         def test_parent_interrupt_main_child_locked_up(self):
             self.skipTest("Interrupt main doesn't do anything useful in a windows service")
 
+        def test_service_stop(self):
+            self.start_up()
+            win32serviceutil.StopService(Config.svc_name)
+
+        def test_service_stop_child_locked_up(self):
+            self.start_up()
+            self.freeze_up_middle_child()
+            win32serviceutil.StopService(Config.svc_name)
+
 
 #Remove the base class from the module dict so it isn't smelled out by nose:
 del(_BaseProcessFamilyFunkyWebServerTestSuite)
