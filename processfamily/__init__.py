@@ -230,6 +230,10 @@ class ChildProcessProxy(object):
         try:
             with self._stdin_lock:
                 self._process_instance.stdin.write("%s\n" % req)
+                self._process_instance.stdin.flush()
+                if command == 'stop':
+                    #Now close the stream - we are done
+                    self._process_instance.stdin.close()
         except Exception as e:
             if raise_write_error:
                 raise
