@@ -271,6 +271,11 @@ class ChildProcessProxy(object):
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(1)
+        logging.info("Subprocess stdout closed - expecting termination")
+        start_time = time.time()
+        while self._process_instance.poll() is None and time.time() - start_time > 5:
+            time.sleep(0.1)
+        self._sys_err_thread.join(5)
         logging.info("Subprocess terminated")
         #Unstick any waiting command threads:
         while self._rsp_queues:
