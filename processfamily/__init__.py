@@ -257,31 +257,33 @@ class ChildProcessProxy(object):
                 time.sleep(1)
 
     def _sys_out_thread_target(self):
-        while True:
-            try:
-                line = self._process_instance.stdout.readline()
-                if not line:
-                    break
+        try:
+            while True:
                 try:
-                    self._handle_response_line(line)
+                    line = self._process_instance.stdout.readline()
+                    if not line:
+                        break
+                    try:
+                        self._handle_response_line(line)
+                    except Exception as e:
+                        logging.error("Error handling child process stdout output: %s\n%s", e,  _traceback_str())
                 except Exception as e:
-                    logging.error("Error handling child process stdout output: %s\n%s", e,  _traceback_str())
-            except Exception as e:
-                logging.error("Exception reading stdout output for processfamily: %s\n%s", e,  _traceback_str())
-                # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
-                # so it might get in to a tight loop which I want to avoid
-                time.sleep(1)
-        logging.info("Subprocess stdout closed - expecting termination")
-        start_time = time.time()
-        while self._process_instance.poll() is None and time.time() - start_time > 5:
-            time.sleep(0.1)
-        self._sys_err_thread.join(5)
-        logging.info("Subprocess terminated")
-        #Unstick any waiting command threads:
-        while self._rsp_queues:
-            for q in self._rsp_queues.values():
-                if q.empty():
-                    q.put_nowait(None)
+                    logging.error("Exception reading stdout output for processfamily: %s\n%s", e,  _traceback_str())
+                    # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
+                    # so it might get in to a tight loop which I want to avoid
+                    time.sleep(1)
+            logging.info("Subprocess stdout closed - expecting termination")
+            start_time = time.time()
+            while self._process_instance.poll() is None and time.time() - start_time > 5:
+                time.sleep(0.1)
+            self._sys_err_thread.join(5)
+            logging.info("Subprocess terminated")
+        finally:
+            #Unstick any waiting command threads:
+            while self._rsp_queues:
+                for q in self._rsp_queues.values():
+                    if q.empty():
+                        q.put_nowait(None)
 
     def _handle_response_line(self, line):
         rsp = json.loads(line)
