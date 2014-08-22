@@ -200,8 +200,16 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         r = requests.get('http://localhost:%d/%s' % (port, command), **kwargs)
         return r.json
 
+    def wait_for_process_to_stop(self, process, timeout):
+        if process is None:
+            return
+        start_time = time.time()
+        while time.time()-start_time < timeout:
+            if self.parent_process.poll() is None:
+                time.sleep(0.3)
 
-class NormalSubprocessServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
+
+class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
     skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
@@ -211,13 +219,25 @@ class NormalSubprocessServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
             close_fds=True)
 
     def wait_for_parent_to_stop(self, timeout):
-        if getattr(self, 'parent_process', None):
-            start_time = time.time()
-            while time.time()-start_time < timeout:
-                if self.parent_process.poll() is None:
-                    time.sleep(0.3)
+        self.wait_for_process_to_stop(getattr(self, 'parent_process', None), timeout)
+
+if sys.platform.startswith('win'):
+    import win32service
+    import win32serviceutil
+
+    class PythonWTests(_BaseProcessFamilyFunkyWebServerTestSuite):
+
+        #skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
+
+        def start_parent_process(self):
+            self.parent_process = subprocess.Popen(
+                [Config.pythonw_exe, self.get_path_to_ParentProcessPy()],
+                close_fds=True)
+
+        def wait_for_parent_to_stop(self, timeout):
+            self.wait_for_process_to_stop(getattr(self, 'parent_process', None), timeout)
 
 
 
-#Remove the base class from the module dict so it isn't smelled out:
+#Remove the base class from the module dict so it isn't smelled out by nose:
 del(_BaseProcessFamilyFunkyWebServerTestSuite)

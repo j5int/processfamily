@@ -17,6 +17,7 @@ import win32evtlogutil
 import sys, string, time
 import servicemanager
 from processfamily import ProcessFamily
+from processfamily.test import Config
 from processfamily.test.FunkyWebServer import FunkyWebServer
 from processfamily.test.ParentProcess import ProcessFamilyForTests
 import logging
@@ -26,7 +27,7 @@ from processfamily.threads import stop_threads
 class ProcessFamilyForWin32ServiceTests(ProcessFamilyForTests):
 
     def get_sys_executable(self):
-        return "c:\\Python27\\pythonw.exe"
+        return Config.pythonw_exe
 
 
 class ProcessFamilyTestService(win32serviceutil.ServiceFramework):

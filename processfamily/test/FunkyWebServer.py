@@ -1,6 +1,7 @@
 __author__ = 'matth'
 
 import BaseHTTPServer
+import SocketServer
 import argparse
 from processfamily.test import Config
 import logging
@@ -48,27 +49,28 @@ else:
 class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     funkyserver = None
+    http_server = None
 
     def do_GET(self):
         """Serve a GET request."""
         t = self.get_response_text()
-        self.send_head(t)
-        self.wfile.write(t)
-        self.wfile.flush()
-        if self.path.startswith('/crash'):
-            self.wfile.close()
-            crash()
-        if self.path.startswith('/stop'):
-            threading.Timer(0.5, self.funkyserver.stop).start()
-        if self.path.startswith('/interrupt_main'):
-            threading.Timer(0.5, thread.interrupt_main).start()
-        if self.path.startswith('/exit'):
-            self.wfile.close()
-            os._exit(1)
-        if self.path.startswith('/hold_gil_'):
-            self.wfile.close()
-            t = int(self.path.split('_')[-1])
-            hold_gil(t)
+        if self.send_head(t):
+            self.wfile.write(t)
+            #I preempt the finish operation here so that processing of this request is all done before we crash or whatever:
+            self.finish()
+            self.http_server.shutdown_request(self.connection)
+
+            if self.path.startswith('/crash'):
+                crash()
+            if self.path.startswith('/stop'):
+                self.funkyserver.stop()
+            if self.path.startswith('/interrupt_main'):
+                thread.interrupt_main()
+            if self.path.startswith('/exit'):
+                os._exit(1)
+            if self.path.startswith('/hold_gil_'):
+                t = int(self.path.split('_')[-1])
+                hold_gil(t)
 
     def do_HEAD(self):
         """Serve a HEAD request."""
@@ -95,10 +97,20 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         This sends the response code and MIME headers.
 
         """
+        if self.path.lower().startswith('/favicon'):
+            self.send_error(404, "File not found")
+            return False
+
         self.send_response(200)
         self.send_header("Content-type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", len(content))
+        self.send_header("Connection", "close")
         self.end_headers()
+        return True
+
+class MyHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
+    def __init__(self, port):
+        MyHTTPRequestHandler.http_server = self
+        BaseHTTPServer.HTTPServer.__init__(self, ("", port), MyHTTPRequestHandler)
 
 class FunkyWebServer(object):
 
@@ -112,7 +124,7 @@ class FunkyWebServer(object):
         port = Config.get_starting_port_nr() + self.process_number
         logging.info("Process %d listening on port %d", self.process_number, port)
         MyHTTPRequestHandler.funkyserver = self
-        self.httpd = BaseHTTPServer.HTTPServer(("", port), MyHTTPRequestHandler)
+        self.httpd = MyHTTPServer(port)
 
 
     def run(self):
