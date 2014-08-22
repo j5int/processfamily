@@ -56,15 +56,21 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                 if process_exists(int(pid)):
                     processes_left_running.append(int(pid))
             os.remove(pid_file)
+
         for pid in processes_left_running:
             try:
                 kill_process(pid)
             except Exception as e:
                 logging.warning("Error killing process with pid %d: %s", pid, _traceback_str())
 
-        self.assertFalse(processes_left_running, msg="There should be no PIDs left running but there are: %s" % (', '.join([str(p) for p in processes_left_running])))
+        start_time = time.time()
+        for pid in processes_left_running:
+            while process_exists(int(pid)) and time.time() - start_time < 40:
+                time.sleep(0.3)
 
         self.check_server_ports_unbound()
+        self.assertFalse(processes_left_running, msg="There should have been no PIDs left running but there were: %s" % (', '.join([str(p) for p in processes_left_running])))
+
 
     def start_up(self, wait_for_start=True):
         self.start_parent_process()
@@ -114,12 +120,47 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         self.kill_parent()
 
+    def test_parent_stop_child_locked_up(self):
+        self.start_up()
+        self.freeze_up_middle_child()
+        self.send_parent_http_command("stop")
+
     def test_parent_exit_child_locked_up(self):
         self.start_up()
-        self.send_middle_child_http_command("hold_gil_%d" % (60*10)) #Freeze up for 10 minutes
-        time.sleep(0.7) #Sleep to give it time to take effect
-        #Now try and exit
+        self.freeze_up_middle_child()
         self.send_parent_http_command("exit")
+
+    def test_parent_crash_child_locked_up(self):
+        self.start_up()
+        self.freeze_up_middle_child()
+        self.send_parent_http_command("crash")
+
+    def test_parent_interrupt_main_child_locked_up(self):
+        self.start_up()
+        self.freeze_up_middle_child()
+        self.send_parent_http_command("interrupt_main")
+
+    def test_parent_kill_child_locked_up(self):
+        self.start_up()
+        self.freeze_up_middle_child()
+        self.kill_parent()
+
+    def test_parent_exit_child_locked_up(self):
+        self.start_up()
+        self.freeze_up_middle_child()
+        self.send_parent_http_command("exit")
+
+    def freeze_up_middle_child(self):
+        #First check that we can do this fast (i.e. things aren't stuttering because of environment):
+        for i in range(5):
+            self.send_middle_child_http_command("", timeout=4)
+        self.send_middle_child_http_command("hold_gil_%d" % (60*10)) #Freeze up for 10 minutes
+        while True:
+            #Try and do this request until it takes longer than 4 secs - this would mean that we have successfully got stuck
+            try:
+                self.send_middle_child_http_command("", timeout=4)
+            except requests.exceptions.Timeout as t:
+                break
 
     def check_server_ports_unbound(self):
         for pnumber in range(4):
@@ -139,14 +180,14 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def get_path_to_ParentProcessPy(self):
         return os.path.join(os.path.dirname(__file__), 'test', 'ParentProcess.py')
 
-    def send_parent_http_command(self, command):
-        return self.send_http_command(Config.get_starting_port_nr(), command)
+    def send_parent_http_command(self, command, **kwargs):
+        return self.send_http_command(Config.get_starting_port_nr(), command, **kwargs)
 
-    def send_middle_child_http_command(self, command):
-        return self.send_http_command(Config.get_starting_port_nr()+2, command)
+    def send_middle_child_http_command(self, command, **kwargs):
+        return self.send_http_command(Config.get_starting_port_nr()+2, command, **kwargs)
 
-    def send_http_command(self, port, command):
-        r = requests.get('http://localhost:%d/%s' % (port, command))
+    def send_http_command(self, port, command, **kwargs):
+        r = requests.get('http://localhost:%d/%s' % (port, command), **kwargs)
         return r.json
 
 

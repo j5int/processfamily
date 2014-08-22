@@ -24,12 +24,12 @@ def crash():
     exec CodeType(0, 5, 8, 0, "hello moshe", (), (), (), "", "", 0, "")
 
 if sys.platform.startswith('win'):
+    #Using a PyDLL here instead of a WinDLL causes the GIL to be acquired:
+    _kernel32 = ctypes.PyDLL('kernel32.dll')
     def hold_gil(timeout):
-        #Using a PyDLL here instead of a WinDLL causes the GIL to be acquired:
-        kernel32 = ctypes.PyDLL('kernel32.dll')
         try:
             logging.info("Stealing GIL for %ss", timeout)
-            kernel32.Sleep(timeout*1000)
+            _kernel32.Sleep(timeout*1000)
             logging.info("Released GIL")
         except ValueError as e:
             #This happens because it does some sneaky checking of things at the end of the
@@ -38,11 +38,11 @@ if sys.platform.startswith('win'):
             #See http://python.net/crew/theller/ctypes/tutorial.html#calling-functions
             pass
 else:
+    _libc = ctypes.PyDLL('libc.so.6')
     def hold_gil(timeout):
         #Using a PyDLL here instead of a CDLL causes the GIL to be acquired:
-        libc = ctypes.PyDLL('libc.so.6')
         logging.info("Stealing GIL for %ss", timeout)
-        libc.sleep(timeout)
+        _libc.sleep(timeout)
         logging.info("Released GIL")
 
 class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
@@ -54,17 +54,21 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         t = self.get_response_text()
         self.send_head(t)
         self.wfile.write(t)
+        self.wfile.flush()
         if self.path.startswith('/crash'):
-            threading.Timer(0.5, crash).start()
+            self.wfile.close()
+            crash()
         if self.path.startswith('/stop'):
             threading.Timer(0.5, self.funkyserver.stop).start()
         if self.path.startswith('/interrupt_main'):
             threading.Timer(0.5, thread.interrupt_main).start()
         if self.path.startswith('/exit'):
-            threading.Timer(0.5, os._exit, args=[1]).start()
+            self.wfile.close()
+            os._exit(1)
         if self.path.startswith('/hold_gil_'):
+            self.wfile.close()
             t = int(self.path.split('_')[-1])
-            threading.Timer(0.5, hold_gil, args=[t]).start()
+            hold_gil(t)
 
     def do_HEAD(self):
         """Serve a HEAD request."""
