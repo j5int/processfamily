@@ -5,6 +5,7 @@ import SocketServer
 import argparse
 from processfamily.test import Config
 import logging
+import logging.handlers
 import threading
 import thread
 import os
@@ -120,6 +121,16 @@ class FunkyWebServer(object):
         arg_parser.add_argument('--num_children', type=int)
         args = arg_parser.parse_args()
         self.process_number = args.process_number or 0
+
+        logsdir = os.path.join(os.path.dirname(__file__), 'logs')
+        if not os.path.exists(logsdir):
+            os.makedirs(logsdir)
+        logFormatter = logging.Formatter('%(asctime)s %(message)s')
+        loghandler = logging.handlers.TimedRotatingFileHandler(os.path.join(logsdir, "process-%02d-log.txt" % self.process_number), when="midnight")
+        loghandler.setFormatter(logFormatter)
+        logger = logging.getLogger()
+        logger.addHandler(loghandler)
+
         self.num_children = args.num_children or 3
         port = Config.get_starting_port_nr() + self.process_number
         logging.info("Process %d listening on port %d", self.process_number, port)
