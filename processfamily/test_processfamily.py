@@ -26,6 +26,8 @@ class TestStartStop(unittest.TestCase):
 
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
+    skip_crash_test = None
+
     def setUp(self):
         self.pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'pid')
         if not os.path.exists(self.pid_dir):
@@ -109,6 +111,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.send_parent_http_command("exit")
 
     def test_parent_crash(self):
+        if self.skip_crash_test:
+            self.skipTest(self.skip_crash_test)
         self.start_up()
         self.send_parent_http_command("crash")
 
@@ -131,6 +135,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.send_parent_http_command("exit")
 
     def test_parent_crash_child_locked_up(self):
+        if self.skip_crash_test:
+            self.skipTest(self.skip_crash_test)
         self.start_up()
         self.freeze_up_middle_child()
         self.send_parent_http_command("crash")
@@ -193,16 +199,19 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
 class NormalSubprocessServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
+    skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
+
     def start_parent_process(self):
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
             close_fds=True)
 
     def wait_for_parent_to_stop(self, timeout):
-        start_time = time.time()
-        while time.time()-start_time < timeout:
-            if self.parent_process.poll() is None:
-                time.sleep(0.3)
+        if getattr(self, 'parent_process', None):
+            start_time = time.time()
+            while time.time()-start_time < timeout:
+                if self.parent_process.poll() is None:
+                    time.sleep(0.3)
 
 
 
