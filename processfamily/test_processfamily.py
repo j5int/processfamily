@@ -232,12 +232,14 @@ if sys.platform.startswith('win'):
 
     class PythonWTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
-        #skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
+        #TODO: it seems that when I'm not closing file descriptors below, the crash dialog starts popping up again:
+        skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
         def start_parent_process(self):
             self.parent_process = subprocess.Popen(
                 [Config.pythonw_exe, self.get_path_to_ParentProcessPy()],
-                close_fds=True)
+                close_fds=False) #TODO: if I close file descriptors here, then my parent process isn't able to read
+                                 #  it's children's out and err streams - this is a bit mysterious
 
         def wait_for_parent_to_stop(self, timeout):
             self.wait_for_process_to_stop(getattr(self, 'parent_process', None), timeout)
