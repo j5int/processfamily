@@ -212,42 +212,48 @@ class ChildProcessProxy(object):
 
     def _send_command(self, command, timeout=None, params=None, ignore_write_error=False, wait_for_response=True):
         response_id = str(uuid.uuid4())
+        try:
+            self._send_command_req(response_id, command, timeout=timeout, params=params, ignore_write_error=ignore_write_error, wait_for_response=wait_for_response)
+        finally:
+            self._cleanup_queue(response_id)
+
+    def _send_command_req(self, response_id, command, timeout=None, params=None, ignore_write_error=False, wait_for_response=True):
         with self._rsp_queues_lock:
             if self._rsp_queues is not None:
                 self._rsp_queues[response_id] = Queue.Queue()
+        cmd = {
+            "method": command,
+            "id": response_id,
+            "jsonrpc": "2.0"
+        }
+        if params is not None:
+            cmd["params"] = params
+
+        req = json.dumps(cmd)
+        assert not '\n' in req
         try:
-            cmd = {
-                "method": command,
-                "id": response_id,
-                "jsonrpc": "2.0"
-            }
-            if params is not None:
-                cmd["params"] = params
-
-            req = json.dumps(cmd)
-            assert not '\n' in req
-            try:
-                with self._stdin_lock:
-                    self._process_instance.stdin.write("%s\n" % req)
-            except Exception as e:
-                if ignore_write_error:
-                    return None
-                raise
-            if wait_for_response:
-
-                with self._rsp_queues_lock:
-                    if self._rsp_queues is None:
-                        return None
-                    q = self._rsp_queues[response_id]
-                if q is None:
-                    return None
-                return q.get(True, timeout)
-            else:
+            with self._stdin_lock:
+                self._process_instance.stdin.write("%s\n" % req)
+        except Exception as e:
+            if ignore_write_error:
                 return None
-        finally:
+            raise
+        if wait_for_response:
+
             with self._rsp_queues_lock:
-                if self._rsp_queues is not None:
-                    del self._rsp_queues[response_id]
+                if self._rsp_queues is None:
+                    return None
+                q = self._rsp_queues[response_id]
+            if q is None:
+                return None
+            return q.get(True, timeout)
+        else:
+            return None
+
+    def _cleanup_queue(self, response_id):
+        with self._rsp_queues_lock:
+            if self._rsp_queues is not None:
+                self._rsp_queues.pop(response_id, None)
 
     def handle_sys_err_line(self, line):
         sys.stderr.write(line)
