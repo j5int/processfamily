@@ -213,11 +213,14 @@ class ChildProcessProxy(object):
     def _send_command(self, command, timeout=None, params=None, ignore_write_error=False, wait_for_response=True):
         response_id = str(uuid.uuid4())
         try:
-            self._send_command_req(response_id, command, timeout=timeout, params=params, ignore_write_error=ignore_write_error, wait_for_response=wait_for_response)
+            if self._send_command_req(response_id, command, params=params, ignore_write_error=ignore_write_error):
+                if wait_for_response:
+                    return self._wait_for_response(response_id, timeout=timeout)
+            return None
         finally:
             self._cleanup_queue(response_id)
 
-    def _send_command_req(self, response_id, command, timeout=None, params=None, ignore_write_error=False, wait_for_response=True):
+    def _send_command_req(self, response_id, command, params=None, ignore_write_error=False, wait_for_response=True):
         with self._rsp_queues_lock:
             if self._rsp_queues is not None:
                 self._rsp_queues[response_id] = Queue.Queue()
@@ -236,19 +239,18 @@ class ChildProcessProxy(object):
                 self._process_instance.stdin.write("%s\n" % req)
         except Exception as e:
             if ignore_write_error:
-                return None
+                return False
             raise
-        if wait_for_response:
+        return True
 
-            with self._rsp_queues_lock:
-                if self._rsp_queues is None:
-                    return None
-                q = self._rsp_queues[response_id]
-            if q is None:
+    def _wait_for_response(self, response_id, timeout=None):
+        with self._rsp_queues_lock:
+            if self._rsp_queues is None:
                 return None
-            return q.get(True, timeout)
-        else:
+            q = self._rsp_queues[response_id]
+        if q is None:
             return None
+        return q.get(True, timeout)
 
     def _cleanup_queue(self, response_id):
         with self._rsp_queues_lock:
