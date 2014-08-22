@@ -348,11 +348,15 @@ class ProcessFamily(object):
         return "py_processfamily_%s" % (str(uuid.uuid4()))
 
     def _add_to_job_object(self):
+        global _global_process_job_handle
+        if _global_process_job_handle is not None:
+            #This means that we are creating another process family - we'll all be in the same job
+            return
+
         if win32job.IsProcessInJob(win32api.GetCurrentProcess(), None):
             raise ValueError("ProcessFamily relies on the parent process NOT being in a job already")
 
         #Create a new job and put us in it before we create any children
-        global _global_process_job_handle
         logging.info("Creating job object and adding parent service to it")
         security_attrs = win32security.SECURITY_ATTRIBUTES()
         security_attrs.bInheritHandle = 0
