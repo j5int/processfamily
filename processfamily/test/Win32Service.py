@@ -31,7 +31,7 @@ class ProcessFamilyForWin32ServiceTests(ProcessFamilyForTests):
 
 
 class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
-    _svc_name_ = "ProcessFamilyTest"
+    _svc_name_ = Config.svc_name
     _svc_display_name_ = "Process Family Test Service"
     _svc_description_ = "A testing windows service for processfamily"
 

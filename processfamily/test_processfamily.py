@@ -178,6 +178,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                 break
 
     def check_server_ports_unbound(self):
+        bound_ports = []
         for pnumber in range(4):
             port = Config.get_starting_port_nr() + pnumber
             #I just try and bind to the server port and see if I have a problem:
@@ -189,8 +190,11 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                     #so frequently that they are still in a STOP_WAIT state when I get here
                     serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 serversocket.bind(("", port))
+            except Exception as e:
+                bound_ports.append(port)
             finally:
                 serversocket.close()
+        self.assertFalse(bound_ports, "The following ports are still bound: %s" % ', '.join([str(p) for p in bound_ports]))
 
     def get_path_to_ParentProcessPy(self):
         return os.path.join(os.path.dirname(__file__), 'test', 'ParentProcess.py')
@@ -244,6 +248,22 @@ if sys.platform.startswith('win'):
         def wait_for_parent_to_stop(self, timeout):
             self.wait_for_process_to_stop(getattr(self, 'parent_process', None), timeout)
 
+    class WindowsServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
+
+        def start_parent_process(self):
+            win32serviceutil.StartService(Config.svc_name)
+
+        def wait_for_parent_to_stop(self, timeout):
+            start_time = time.time()
+            while time.time()-start_time < timeout:
+                if win32serviceutil.QueryServiceStatus(Config.svc_name)[1] != win32service.SERVICE_STOPPED:
+                    time.sleep(0.3)
+
+        def test_parent_interrupt_main(self):
+            self.skipTest("Interrupt main doesn't do anything useful in a windows service")
+
+        def test_parent_interrupt_main_child_locked_up(self):
+            self.skipTest("Interrupt main doesn't do anything useful in a windows service")
 
 
 #Remove the base class from the module dict so it isn't smelled out by nose:
