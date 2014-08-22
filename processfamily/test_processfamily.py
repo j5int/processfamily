@@ -76,19 +76,24 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def start_up(self, wait_for_start=True):
         self.start_parent_process()
-        #Wait up to 10 secs for the parent port to be available:
+        #Wait up to 10 secs for the all ports to be available:
         start_time = time.time()
-        while time.time() - start_time < 10:
-            try:
-                s = socket.socket()
+        still_waiting = True
+        while still_waiting and time.time() - start_time < 10:
+            still_waiting = False
+            for i in range(4):
                 try:
-                    s.connect(("localhost", Config.get_starting_port_nr()))
-                    break
-                except socket.error, e:
-                    pass
-            finally:
-                s.close()
-            time.sleep(0.3)
+                    s = socket.socket()
+                    try:
+                        s.connect(("localhost", Config.get_starting_port_nr()+i))
+                    except socket.error, e:
+                        still_waiting = True
+                        break
+                finally:
+                    s.close()
+            if still_waiting:
+                time.sleep(0.3)
+        self.assertFalse(still_waiting, "Waited 10 seconds and some http ports are still not accessible")
 
 
     def get_pid_files(self):
