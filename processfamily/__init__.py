@@ -212,20 +212,20 @@ class ChildProcessProxy(object):
 
     def _send_command(self, command, timeout=None, params=None, ignore_write_error=False, wait_for_response=True):
         response_id = str(uuid.uuid4())
-        cmd = {
-            "method": command,
-            "id": response_id,
-            "jsonrpc": "2.0"
-        }
-        if params is not None:
-            cmd["params"] = params
-
-        req = json.dumps(cmd)
-        assert not '\n' in req
         with self._rsp_queues_lock:
             if self._rsp_queues is not None:
                 self._rsp_queues[response_id] = Queue.Queue()
         try:
+            cmd = {
+                "method": command,
+                "id": response_id,
+                "jsonrpc": "2.0"
+            }
+            if params is not None:
+                cmd["params"] = params
+
+            req = json.dumps(cmd)
+            assert not '\n' in req
             try:
                 with self._stdin_lock:
                     self._process_instance.stdin.write("%s\n" % req)
