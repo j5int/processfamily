@@ -16,6 +16,7 @@ import jsonrpc
 import Queue
 import pkgutil
 from processfamily.threads import stop_threads
+from processfamily.processes import kill_process
 
 def start_child_process(child_process_instance):
     host = _BaseChildProcessHost(child_process_instance)
@@ -204,23 +205,15 @@ class ChildProcessProxy(object):
         self._rsp_queues = {}
         self._stdin_lock = threading.RLock()
 
-    def send_stop_command(self):
-        self._send_command("stop", timeout=None, ignore_write_error=True, wait_for_response=True)
-
-    def wait_for_start_event(self, timeout=None):
-        self._send_command("wait_for_start", timeout=timeout)
-
-    def _send_command(self, command, timeout=None, params=None, ignore_write_error=False, wait_for_response=True):
+    def send_command(self, command, timeout, params=None, raise_write_error=True):
         response_id = str(uuid.uuid4())
         try:
-            if self._send_command_req(response_id, command, params=params, ignore_write_error=ignore_write_error):
-                if wait_for_response:
-                    return self._wait_for_response(response_id, timeout=timeout)
-            return None
+            self._send_command_req(response_id, command, params=params, raise_write_error=raise_write_error)
+            return self._wait_for_response(response_id, timeout)
         finally:
             self._cleanup_queue(response_id)
 
-    def _send_command_req(self, response_id, command, params=None, ignore_write_error=False, wait_for_response=True):
+    def _send_command_req(self, response_id, command, params=None, raise_write_error=False):
         with self._rsp_queues_lock:
             if self._rsp_queues is not None:
                 self._rsp_queues[response_id] = Queue.Queue()
@@ -238,19 +231,21 @@ class ChildProcessProxy(object):
             with self._stdin_lock:
                 self._process_instance.stdin.write("%s\n" % req)
         except Exception as e:
-            if ignore_write_error:
-                return False
-            raise
-        return True
+            if raise_write_error:
+                raise
+            logging.error("Failed to send '%s' command to child process: %s\n%s", command, e, _traceback_str())
 
-    def _wait_for_response(self, response_id, timeout=None):
+    def _wait_for_response(self, response_id, timeout):
         with self._rsp_queues_lock:
             if self._rsp_queues is None:
                 return None
-            q = self._rsp_queues[response_id]
+            q = self._rsp_queues.get(response_id, None)
         if q is None:
             return None
-        return q.get(True, timeout)
+        try:
+            return q.get(True, timeout)
+        except Queue.Empty as e:
+            raise TimeoutException("Timed out waiting for response to child command")
 
     def _cleanup_queue(self, response_id):
         with self._rsp_queues_lock:
@@ -337,7 +332,7 @@ class ProcessFamily(object):
     def get_sys_executable(self):
         return sys.executable
 
-    def start(self):
+    def start(self, timeout=30):
         assert not self.child_processes
         self.child_processes = []
         for i in range(self.number_of_child_processes):
@@ -348,24 +343,57 @@ class ProcessFamily(object):
                     stderr=subprocess.PIPE)
             self.child_processes.append(ChildProcessProxy(p))
 
-        for p in self.child_processes:
-            p.wait_for_start_event()
+        self.send_command_to_all("wait_for_start", timeout=timeout)
 
-    def stop(self, timeout=None):
-        logging.info("Sending stop commands")
+    def stop(self, timeout=30):
+        clean_timeout = timeout - 1
         start_time = time.time()
-        for p in self.child_processes:
-            if p._process_instance.poll() is None:
-                p.send_stop_command()
+        logging.info("Sending stop commands")
+        try:
+            self.send_command_to_all("stop", timeout=clean_timeout)
+        except TimeoutException as e:
+            pass
 
         logging.info("Waiting for child processes to terminate")
-        while self.child_processes:
+        self._wait_for_children_to_terminate(start_time, clean_timeout)
+
+        if self.child_processes:
+            #We've nearly run out of time - let's try and kill them:
+            logging.info("Attempting to kill stubborn child processes")
             for p in list(self.child_processes):
-                if timeout is not None and time.time() - start_time > timeout:
-                    raise TimeoutException("Timed out waiting for child processes to stop")
+                try:
+                    kill_process(p._process_instance.pid)
+                except Exception as e:
+                    logging.warning("Failed to kill child process instance %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
+            self._wait_for_children_to_terminate(start_time, timeout)
+
+    def _wait_for_children_to_terminate(self, start_time, timeout):
+        first_run = True
+        while self.child_processes and (first_run or time.time() - start_time < timeout):
+            for p in list(self.child_processes):
                 if p._process_instance.poll() is not None:
                     self.child_processes.remove(p)
-            time.sleep(0.1)
+            if first_run:
+                first_run = False
+            else:
+                time.sleep(0.1)
+
+
+    def send_command_to_all(self, command, timeout=30, params=None):
+        start_time = time.time()
+        response_id = str(uuid.uuid4())
+        try:
+            for p in self.child_processes:
+                p._send_command_req(response_id, command, params=params, raise_write_error=False)
+
+            for p in self.child_processes:
+                time_left = timeout - (time.time() - start_time)
+                if time_left <= 0:
+                    raise TimeoutException("Timed out waiting for children to respond to '%s' command" % command)
+                p._wait_for_response(response_id, time_left)
+        finally:
+            for p in self.child_processes:
+                p._cleanup_queue(response_id)
 
     def _find_module_filename(self, modulename):
         """finds the filename of the module with the given name (supports submodules)"""

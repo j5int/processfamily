@@ -128,6 +128,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         self.freeze_up_middle_child()
         self.send_parent_http_command("stop")
+        #This needs time to wait for the child for 10 seconds:
+        self.wait_for_parent_to_stop(11)
 
     def test_parent_exit_child_locked_up(self):
         self.start_up()
@@ -145,6 +147,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         self.freeze_up_middle_child()
         self.send_parent_http_command("interrupt_main")
+        #This needs time to wait for the child for 10 seconds:
+        self.wait_for_parent_to_stop(11)
 
     def test_parent_kill_child_locked_up(self):
         self.start_up()
