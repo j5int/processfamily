@@ -18,6 +18,11 @@ import pkgutil
 from processfamily.threads import stop_threads
 from processfamily.processes import kill_process
 
+if sys.platform.startswith('win'):
+    import win32job
+    import win32api
+    import win32security
+
 def start_child_process(child_process_instance):
     host = _BaseChildProcessHost(child_process_instance)
     host.run()
@@ -315,6 +320,9 @@ class ChildProcessProxy(object):
             if rsp_queue is not None:
                 rsp_queue.put_nowait(rsp)
 
+#We need to keep the job handle in a global variable so that can't go out of scope and result in our process
+#being killed
+_global_process_job_handle = None
 
 class ProcessFamily(object):
     """
@@ -336,10 +344,34 @@ class ProcessFamily(object):
     def get_sys_executable(self):
         return sys.executable
 
+    def get_job_object_name(self):
+        return "py_processfamily_%s" % (str(uuid.uuid4()))
+
+    def _add_to_job_object(self):
+        if win32job.IsProcessInJob(win32api.GetCurrentProcess(), None):
+            raise ValueError("ProcessFamily relies on the parent process NOT being in a job already")
+
+        #Create a new job and put us in it before we create any children
+        global _global_process_job_handle
+        logging.info("Creating job object and adding parent service to it")
+        security_attrs = win32security.SECURITY_ATTRIBUTES()
+        security_attrs.bInheritHandle = 0
+        _global_process_job_handle = win32job.CreateJobObject(security_attrs, self.get_job_object_name())
+        extended_info = win32job.QueryInformationJobObject(_global_process_job_handle, win32job.JobObjectExtendedLimitInformation)
+        extended_info['BasicLimitInformation']['LimitFlags'] = win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        win32job.SetInformationJobObject(_global_process_job_handle, win32job.JobObjectExtendedLimitInformation, extended_info)
+        win32job.AssignProcessToJobObject(_global_process_job_handle, win32api.GetCurrentProcess())
+        logging.info("Added to job object")
+
     def start(self, timeout=30):
         assert not self.child_processes
+
+        if sys.platform.startswith('win'):
+            self._add_to_job_object()
+
         self.child_processes = []
         for i in range(self.number_of_child_processes):
+            logging.info("Starting child process %d" % (i+1))
             p = subprocess.Popen(
                     self.get_child_process_cmd(i),
                     stdin=subprocess.PIPE,
@@ -347,7 +379,9 @@ class ProcessFamily(object):
                     stderr=subprocess.PIPE)
             self.child_processes.append(ChildProcessProxy(p))
 
+        logging.info("Waiting for child start events")
         self.send_command_to_all("wait_for_start", timeout=timeout)
+        logging.info("Family started up")
 
     def stop(self, timeout=30):
         clean_timeout = timeout - 1

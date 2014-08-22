@@ -273,6 +273,8 @@ if sys.platform.startswith('win'):
             self.start_up()
             self.freeze_up_middle_child()
             win32serviceutil.StopService(Config.svc_name)
+            #This needs time to wait for the child for 10 seconds:
+            self.wait_for_parent_to_stop(11)
 
 
 #Remove the base class from the module dict so it isn't smelled out by nose:

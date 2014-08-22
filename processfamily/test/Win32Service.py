@@ -16,7 +16,7 @@ import win32event
 import win32evtlogutil
 import sys, string, time
 import servicemanager
-from processfamily import ProcessFamily
+from processfamily import _traceback_str
 from processfamily.test import Config
 from processfamily.test.FunkyWebServer import FunkyWebServer
 from processfamily.test.ParentProcess import ProcessFamilyForTests
@@ -46,18 +46,25 @@ class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
     def SvcDoRun(self):
         servicemanager.LogInfoMsg("ProcessFamilyTest starting up ..." )
         try:
+            logging.getLogger().setLevel(logging.INFO)
             self.server = FunkyWebServer()
+            logging.info("Starting process family")
             family = ProcessFamilyForWin32ServiceTests(number_of_child_processes=self.server.num_children)
             family.start()
             servicemanager.LogInfoMsg("ProcessFamilyTest started")
             try:
                 try:
+                    logging.info("Starting HTTP server")
                     self.server.run()
                 except KeyboardInterrupt:
                     logging.info("Stopping...")
             finally:
+                logging.info("Stopping process family")
                 family.stop(timeout=10)
+        except Exception as e:
+            logging.error("Error in windows service: %s\n%s", e, _traceback_str())
         finally:
+            logging.info("Stopping")
             stop_threads()
         servicemanager.LogInfoMsg("ProcessFamilyTest stopped" )
 
