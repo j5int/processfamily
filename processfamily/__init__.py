@@ -200,6 +200,7 @@ class ChildProcessProxy(object):
         self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
         self._sys_err_thread.start()
         self._sys_out_thread.start()
+        self._rsp_queues_lock = threading.RLock()
         self._rsp_queues = {}
         self._stdin_lock = threading.RLock()
 
@@ -221,7 +222,9 @@ class ChildProcessProxy(object):
 
         req = json.dumps(cmd)
         assert not '\n' in req
-        self._rsp_queues[response_id] = Queue.Queue()
+        with self._rsp_queues_lock:
+            if self._rsp_queues is not None:
+                self._rsp_queues[response_id] = Queue.Queue()
         try:
             try:
                 with self._stdin_lock:
@@ -231,11 +234,20 @@ class ChildProcessProxy(object):
                     return None
                 raise
             if wait_for_response:
-                return self._rsp_queues[response_id].get(True, timeout)
+
+                with self._rsp_queues_lock:
+                    if self._rsp_queues is None:
+                        return None
+                    q = self._rsp_queues[response_id]
+                if q is None:
+                    return None
+                return q.get(True, timeout)
             else:
                 return None
         finally:
-            del self._rsp_queues[response_id]
+            with self._rsp_queues_lock:
+                if self._rsp_queues is not None:
+                    del self._rsp_queues[response_id]
 
     def handle_sys_err_line(self, line):
         sys.stderr.write(line)
@@ -280,15 +292,19 @@ class ChildProcessProxy(object):
             logging.info("Subprocess terminated")
         finally:
             #Unstick any waiting command threads:
-            while self._rsp_queues:
+            with self._rsp_queues_lock:
                 for q in self._rsp_queues.values():
                     if q.empty():
                         q.put_nowait(None)
+                self._rsp_queues = None
 
     def _handle_response_line(self, line):
         rsp = json.loads(line)
         if "id" in rsp:
-            rsp_queue = self._rsp_queues.get(rsp["id"], None)
+            with self._rsp_queues_lock:
+                if self._rsp_queues is None:
+                    return
+                rsp_queue = self._rsp_queues.get(rsp["id"], None)
             if rsp_queue is not None:
                 rsp_queue.put_nowait(rsp)
 
