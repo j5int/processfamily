@@ -57,4 +57,4 @@ else:
             return False
 
     def kill_process(pid):
-        os.kill(pid, signal.SIGHUP)
+        os.kill(pid, signal.SIGKILL)
