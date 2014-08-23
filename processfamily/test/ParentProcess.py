@@ -8,7 +8,7 @@ if __name__ == '__main__':
     with open(pid_filename, "w") as pid_f:
         pid_f.write("%s\n" % pid)
 
-from processfamily import ProcessFamily
+from processfamily import ProcessFamily, _traceback_str
 from processfamily.test.FunkyWebServer import FunkyWebServer
 import logging
 from processfamily.threads import stop_threads
@@ -28,18 +28,20 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting")
     try:
-        server = FunkyWebServer()
-
-        family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
-        family.start()
         try:
-            try:
-                server.run()
-            except KeyboardInterrupt:
-                logging.info("Stopping...")
-        finally:
-            family.stop(timeout=10)
-    finally:
-        stop_threads()
+            server = FunkyWebServer()
 
+            family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
+            family.start(timeout=10)
+            try:
+                try:
+                    server.run()
+                except KeyboardInterrupt:
+                    logging.info("Stopping...")
+            finally:
+                family.stop(timeout=10)
+        finally:
+            stop_threads()
+    except Exception as e:
+        logging.error("Error in process family test parent process: %s\n%s", e, _traceback_str())
     logging.info("Done")

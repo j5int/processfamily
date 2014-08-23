@@ -168,6 +168,11 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up(test_command='child_exit_on_start', wait_for_middle_child=False)
         self.send_parent_http_command("stop")
 
+    def test_child_freeze_on_start(self):
+        self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
+        self.send_parent_http_command("stop")
+
+
     if not sys.platform.startswith('win'):
         def test_sigint(self):
             self.skipTest("These are a bit dicey - they depend on which thread gets the signal")

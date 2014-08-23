@@ -14,6 +14,9 @@ if __name__ == '__main__':
                 command = f.read()
             if command == 'child_exit_on_start':
                 os._exit(-1)
+            elif command == 'child_freeze_on_start':
+                from processfamily.test.FunkyWebServer import hold_gil
+                hold_gil(10*60)
 
 from processfamily import ChildProcess, start_child_process
 import logging
