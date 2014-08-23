@@ -17,6 +17,8 @@ import ctypes
 if sys.platform.startswith('win'):
     import win32job
     import win32api
+else:
+    import prctl
 
 def crash():
     """
@@ -130,6 +132,12 @@ class FunkyWebServer(object):
         loghandler.setFormatter(logFormatter)
         logger = logging.getLogger()
         logger.addHandler(loghandler)
+
+        if not sys.platform.startswith('win'):
+            if self.process_number > 0:
+                prctl.set_name('pyprfam-child-%d'%self.process_number)
+            else:
+                prctl.set_name('pyprfam-parent')
 
         self.num_children = args.num_children or 3
         port = Config.get_starting_port_nr() + self.process_number
