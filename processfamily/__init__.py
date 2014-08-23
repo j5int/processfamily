@@ -17,11 +17,14 @@ import Queue
 import pkgutil
 from processfamily.threads import stop_threads
 from processfamily.processes import kill_process
+import signal
 
 if sys.platform.startswith('win'):
     import win32job
     import win32api
     import win32security
+else:
+    import prctl
 
 def start_child_process(child_process_instance):
     host = _BaseChildProcessHost(child_process_instance)
@@ -334,6 +337,7 @@ class ProcessFamily(object):
         self.run_as_script = run_as_script
         self.number_of_child_processes = number_of_child_processes
         self.child_processes = []
+        self._child_process_group_id = None
 
     def get_child_process_cmd(self, child_number):
         if self.run_as_script:
@@ -367,6 +371,26 @@ class ProcessFamily(object):
         win32job.AssignProcessToJobObject(_global_process_job_handle, win32api.GetCurrentProcess())
         logging.info("Added to job object")
 
+    def get_Popen_kwargs(self, i, **kwargs):
+        if sys.platform.startswith('win'):
+            return kwargs
+        else:
+
+            kwargs['close_fds'] = True
+            kwargs['preexec_fn'] = self.pre_exec_fn_first_child if i == 0 else self.pre_exec_fn_other_children
+            return kwargs
+
+
+    def pre_exec_fn_first_child(self):
+        #Assign this new process to a new group - this is called after fork(), but before exec()
+        os.setpgrp()
+        prctl.set_pdeathsig(signal.SIGKILL)
+
+    def pre_exec_fn_other_children(self):
+        #Assign this to the same group as the first child
+        os.setpgid(0, os.getpgid(self.child_processes[0]._process_instance.pid))
+        prctl.set_pdeathsig(signal.SIGKILL)
+
     def start(self, timeout=30):
         assert not self.child_processes
 
@@ -378,9 +402,10 @@ class ProcessFamily(object):
             logging.info("Starting child process %d" % (i+1))
             p = subprocess.Popen(
                     self.get_child_process_cmd(i),
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE)
+                    **self.get_Popen_kwargs(i,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE))
             self.child_processes.append(ChildProcessProxy(p))
 
         logging.info("Waiting for child start events")
