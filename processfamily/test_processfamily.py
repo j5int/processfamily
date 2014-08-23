@@ -19,7 +19,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     skip_crash_test = None
 
     def setUp(self):
-        self.pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'pid')
+        self.pid_dir = os.path.join(os.path.dirname(__file__), 'test', 'tmp', 'pid')
         if not os.path.exists(self.pid_dir):
             os.makedirs(self.pid_dir)
         for pid_file in self.get_pid_files():
@@ -64,7 +64,14 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.assertFalse(processes_left_running, msg="There should have been no PIDs left running but there were: %s" % (', '.join([str(p) for p in processes_left_running])))
 
 
-    def start_up(self, wait_for_start=True):
+    def start_up(self, test_command=None):
+        command_file = os.path.join(os.path.dirname(__file__), 'test', 'tmp', 'command.txt')
+        if test_command:
+            with open(command_file, "w") as f:
+                f.write(test_command)
+        elif os.path.exists(command_file):
+            os.remove(command_file)
+
         self.start_parent_process()
         #Wait up to 10 secs for the all ports to be available:
         start_time = time.time()
@@ -154,6 +161,10 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         self.freeze_up_middle_child()
         self.send_parent_http_command("exit")
+
+    def test_child_exit_on_start(self):
+        self.start_up(test_command='child_exit_on_start')
+        self.send_parent_http_command("stop")
 
     if not sys.platform.startswith('win'):
         def test_sigint(self):

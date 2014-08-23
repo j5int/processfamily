@@ -4,7 +4,7 @@ import os
 #I do this for Win32Service when name != '__main__', because when running as a service the main method isn't actually called
 if __name__ != '__main__':
     pid = os.getpid()
-    pid_filename = os.path.join(os.path.dirname(__file__), 'pid', 's%s.pid' % pid)
+    pid_filename = os.path.join(os.path.dirname(__file__), 'tmp', 'pid', 's%s.pid' % pid)
     with open(pid_filename, "w") as pid_f:
         pid_f.write("%s\n" % pid)
 

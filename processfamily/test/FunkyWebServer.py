@@ -124,7 +124,7 @@ class FunkyWebServer(object):
         args = arg_parser.parse_args()
         self.process_number = args.process_number or 0
 
-        logsdir = os.path.join(os.path.dirname(__file__), 'logs')
+        logsdir = os.path.join(os.path.dirname(__file__), 'tmp', 'logs')
         if not os.path.exists(logsdir):
             os.makedirs(logsdir)
         logFormatter = logging.Formatter('%(asctime)s %(message)s')
