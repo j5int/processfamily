@@ -64,7 +64,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.assertFalse(processes_left_running, msg="There should have been no PIDs left running but there were: %s" % (', '.join([str(p) for p in processes_left_running])))
 
 
-    def start_up(self, test_command=None):
+    def start_up(self, test_command=None, wait_for_middle_child=True):
         command_file = os.path.join(os.path.dirname(__file__), 'test', 'tmp', 'command.txt')
         if test_command:
             with open(command_file, "w") as f:
@@ -79,6 +79,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         while still_waiting and time.time() - start_time < 10:
             still_waiting = False
             for i in range(4):
+                if i == 2 and not wait_for_middle_child:
+                    continue
                 try:
                     s = socket.socket()
                     try:
@@ -163,7 +165,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.send_parent_http_command("exit")
 
     def test_child_exit_on_start(self):
-        self.start_up(test_command='child_exit_on_start')
+        self.start_up(test_command='child_exit_on_start', wait_for_middle_child=False)
         self.send_parent_http_command("stop")
 
     if not sys.platform.startswith('win'):
