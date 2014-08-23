@@ -18,6 +18,7 @@ import pkgutil
 from processfamily.threads import stop_threads
 from processfamily.processes import kill_process
 import signal
+import functools
 
 if sys.platform.startswith('win'):
     import win32job
@@ -377,18 +378,14 @@ class ProcessFamily(object):
         else:
 
             kwargs['close_fds'] = True
-            kwargs['preexec_fn'] = self.pre_exec_fn_first_child if i == 0 else self.pre_exec_fn_other_children
+            kwargs['preexec_fn'] = functools.partial(self.pre_exec_fn, i)
             return kwargs
 
 
-    def pre_exec_fn_first_child(self):
-        #Assign this new process to a new group - this is called after fork(), but before exec()
+    def pre_exec_fn(self, i):
+        #This is called after fork(), but before exec()
+        #Assign this new process to a new group
         os.setpgrp()
-        prctl.set_pdeathsig(signal.SIGKILL)
-
-    def pre_exec_fn_other_children(self):
-        #Assign this to the same group as the first child
-        os.setpgid(0, os.getpgid(self.child_processes[0]._process_instance.pid))
         prctl.set_pdeathsig(signal.SIGKILL)
 
     def start(self, timeout=30):
