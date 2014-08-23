@@ -12,6 +12,7 @@ import logging
 import glob
 from processfamily.processes import process_exists, kill_process
 from processfamily import _traceback_str
+import signal
 
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
@@ -153,6 +154,19 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         self.freeze_up_middle_child()
         self.send_parent_http_command("exit")
+
+    if not sys.platform.startswith('win'):
+        def test_sigint(self):
+            self.start_up()
+            os.kill(self.parent_process.pid, signal.SIGINT)
+
+        def test_sigint_child_locked_up(self):
+            self.start_up()
+            os.kill(self.parent_process.pid, signal.SIGINT)
+            self.freeze_up_middle_child()
+            #This needs time to wait for the child for 10 seconds:
+            self.wait_for_parent_to_stop(11)
+
 
     def freeze_up_middle_child(self):
         #First check that we can do this fast (i.e. things aren't stuttering because of environment):
