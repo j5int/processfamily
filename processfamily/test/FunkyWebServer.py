@@ -135,9 +135,10 @@ class FunkyWebServer(object):
 
         if not sys.platform.startswith('win'):
             if self.process_number > 0:
-                prctl.set_name('pyprfam-child-%d'%self.process_number)
+                prctl.set_name('python-pfchild')
             else:
-                prctl.set_name('pyprfam-parent')
+                prctl.set_name('python-pfparent')
+
 
         self.num_children = args.num_children or 3
         port = Config.get_starting_port_nr() + self.process_number
