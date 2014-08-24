@@ -99,6 +99,20 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                 time.sleep(0.3)
         self.assertFalse(still_waiting, "Waited 10 seconds and some http ports are still not accessible")
 
+    def assert_middle_child_port_unbound(self):
+        port = Config.get_starting_port_nr()+2
+        logging.info("Checking for ability to bind to port %d", port)
+        serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            if not sys.platform.startswith('win'):
+                #On linux I need this setting cos we are starting and stopping things
+                #so frequently that they are still in a STOP_WAIT state when I get here
+                serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            serversocket.bind(("", port))
+        except Exception as e:
+            self.fail("Middle child port is not unbound as expected")
+        finally:
+            serversocket.close()
 
     def get_pid_files(self):
         return glob.glob(os.path.join(self.pid_dir, "*.pid"))
@@ -171,21 +185,25 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def test_child_exit_on_start(self):
         self.start_up(test_command='child_exit_on_start', wait_for_middle_child=False)
+        self.assert_middle_child_port_unbound()
         self.send_parent_http_command("stop")
 
     def test_child_freeze_on_start(self):
         self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
+        self.assert_middle_child_port_unbound()
         self.send_parent_http_command("stop")
         self.wait_for_parent_to_stop(11)
 
     def test_child_error_on_start(self):
         self.start_up(test_command='child_error_on_start', wait_for_middle_child=False)
+        self.assert_middle_child_port_unbound()
         self.send_parent_http_command("stop")
 
     def test_child_crash_on_start(self):
         if self.skip_crash_test:
             self.skipTest(self.skip_crash_test)
         self.start_up(test_command='child_crash_on_start', wait_for_middle_child=False)
+        self.assert_middle_child_port_unbound()
         self.send_parent_http_command("stop")
 
     if not sys.platform.startswith('win'):
