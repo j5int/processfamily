@@ -39,9 +39,6 @@ def _exception_str():
     exc_info = sys.exc_info()
     return "".join(traceback.format_exception_only(exc_info[0], exc_info[1]))
 
-class TimeoutException(Exception):
-    pass
-
 class ChildProcess(object):
     """
     Subclass this for the implementation of the child process. You must also include an appropriate main entry point.
@@ -214,18 +211,19 @@ class ChildProcessProxy(object):
         self._rsp_queues = {}
         self._stdin_lock = threading.RLock()
 
-    def send_command(self, command, timeout, params=None, raise_write_error=True):
+    def send_command(self, command, timeout, params=None):
         response_id = str(uuid.uuid4())
         try:
-            self._send_command_req(response_id, command, params=params, raise_write_error=raise_write_error)
+            self._send_command_req(response_id, command, params=params)
             return self._wait_for_response(response_id, timeout)
         finally:
             self._cleanup_queue(response_id)
 
-    def _send_command_req(self, response_id, command, params=None, raise_write_error=False):
+    def _send_command_req(self, response_id, command, params=None):
         with self._rsp_queues_lock:
-            if self._rsp_queues is not None:
-                self._rsp_queues[response_id] = Queue.Queue()
+            if self._rsp_queues is None:
+                return
+            self._rsp_queues[response_id] = Queue.Queue()
         cmd = {
             "method": command,
             "id": response_id,
@@ -244,9 +242,9 @@ class ChildProcessProxy(object):
                     #Now close the stream - we are done
                     self._process_instance.stdin.close()
         except Exception as e:
-            if raise_write_error:
+            if self._process_instance.poll() is None:
+                #The process is running, so something is wrong:
                 raise
-            logging.error("Failed to send '%s' command to child process: %s\n%s", command, e, _traceback_str())
 
     def _wait_for_response(self, response_id, timeout):
         with self._rsp_queues_lock:
@@ -256,9 +254,12 @@ class ChildProcessProxy(object):
         if q is None:
             return None
         try:
-            return q.get(True, timeout)
+            if timeout <= 0:
+                return q.get_nowait()
+            else:
+                return q.get(True, timeout)
         except Queue.Empty as e:
-            raise TimeoutException("Timed out waiting for response to child command")
+            return None
 
     def _cleanup_queue(self, response_id):
         with self._rsp_queues_lock:
@@ -406,17 +407,24 @@ class ProcessFamily(object):
             self.child_processes.append(ChildProcessProxy(p))
 
         logging.info("Waiting for child start events")
-        self.send_command_to_all("wait_for_start", timeout=timeout)
+        responses = self.send_command_to_all("wait_for_start", timeout=timeout)
+        for i, r in enumerate(responses):
+            if r is None:
+                if self.child_processes[i]._process_instance.poll() is None:
+                    logging.error(
+                        "Timed out waiting for child process (%d) to complete initialisation",
+                        self.child_processes[i]._process_instance.pid)
+                else:
+                    logging.error(
+                        "Child process terminated with response code %d before completing initialisation",
+                        self.child_processes[i]._process_instance.poll())
         logging.info("Family started up")
 
     def stop(self, timeout=30):
         clean_timeout = timeout - 1
         start_time = time.time()
         logging.info("Sending stop commands")
-        try:
-            self.send_command_to_all("stop", timeout=clean_timeout)
-        except TimeoutException as e:
-            pass
+        self.send_command_to_all("stop", timeout=clean_timeout)
 
         logging.info("Waiting for child processes to terminate")
         self._wait_for_children_to_terminate(start_time, clean_timeout)
@@ -446,15 +454,15 @@ class ProcessFamily(object):
     def send_command_to_all(self, command, timeout=30, params=None):
         start_time = time.time()
         response_id = str(uuid.uuid4())
+        responses = [None]*len(self.child_processes)
         try:
             for p in self.child_processes:
-                p._send_command_req(response_id, command, params=params, raise_write_error=False)
+                p._send_command_req(response_id, command, params=params)
 
-            for p in self.child_processes:
+            for i, p in enumerate(self.child_processes):
                 time_left = timeout - (time.time() - start_time)
-                if time_left <= 0:
-                    raise TimeoutException("Timed out waiting for children to respond to '%s' command" % command)
-                p._wait_for_response(response_id, time_left)
+                responses[i] = p._wait_for_response(response_id, time_left)
+            return responses
         finally:
             for p in self.child_processes:
                 p._cleanup_queue(response_id)

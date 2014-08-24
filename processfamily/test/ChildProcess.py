@@ -13,10 +13,15 @@ if __name__ == '__main__':
             with open(command_file, "r") as f:
                 command = f.read()
             if command == 'child_exit_on_start':
-                os._exit(-1)
+                os._exit(25)
             elif command == 'child_freeze_on_start':
                 from processfamily.test.FunkyWebServer import hold_gil
                 hold_gil(10*60)
+            elif command == 'child_error_on_start':
+                import middle.child.syndrome
+            elif command == 'child_crash_on_start':
+                from processfamily.test.FunkyWebServer import crash
+                crash()
 
 from processfamily import ChildProcess, start_child_process
 import logging

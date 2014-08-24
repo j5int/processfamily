@@ -13,6 +13,7 @@ import glob
 from processfamily.processes import process_exists, kill_process
 from processfamily import _traceback_str
 import signal
+import threading
 
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
@@ -34,6 +35,10 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.check_server_ports_unbound()
 
     def tearDown(self):
+        command_file = os.path.join(os.path.dirname(__file__), 'test', 'tmp', 'command.txt')
+        if os.path.exists(command_file):
+            os.remove(command_file)
+
         self.wait_for_parent_to_stop(5)
 
         #Now check that no processes are left over:
@@ -171,7 +176,17 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def test_child_freeze_on_start(self):
         self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
         self.send_parent_http_command("stop")
+        self.wait_for_parent_to_stop(11)
 
+    def test_child_error_on_start(self):
+        self.start_up(test_command='child_error_on_start', wait_for_middle_child=False)
+        self.send_parent_http_command("stop")
+
+    def test_child_crash_on_start(self):
+        if self.skip_crash_test:
+            self.skipTest(self.skip_crash_test)
+        self.start_up(test_command='child_crash_on_start', wait_for_middle_child=False)
+        self.send_parent_http_command("stop")
 
     if not sys.platform.startswith('win'):
         def test_sigint(self):
@@ -234,10 +249,12 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def wait_for_process_to_stop(self, process, timeout):
         if process is None:
+            logging.info("No process to wait for")
             return
+        logging.info("Waiting for process (%d) to finish", process.pid)
         start_time = time.time()
         while time.time()-start_time < timeout:
-            if self.parent_process.poll() is None:
+            if process.poll() is None:
                 time.sleep(0.3)
 
 
@@ -249,6 +266,7 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
             close_fds=True)
+        threading.Thread(target=self.parent_process.communicate).start()
 
     def wait_for_parent_to_stop(self, timeout):
         self.wait_for_process_to_stop(getattr(self, 'parent_process', None), timeout)
@@ -267,6 +285,7 @@ if sys.platform.startswith('win'):
                 [Config.pythonw_exe, self.get_path_to_ParentProcessPy()],
                 close_fds=False) #TODO: if I close file descriptors here, then my parent process isn't able to read
                                  #  it's children's out and err streams - this is a bit mysterious
+            threading.Thread(target=self.parent_process.communicate).start()
 
         def wait_for_parent_to_stop(self, timeout):
             self.wait_for_process_to_stop(getattr(self, 'parent_process', None), timeout)
