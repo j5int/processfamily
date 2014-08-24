@@ -50,9 +50,9 @@ class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
             self.server = FunkyWebServer()
             logging.info("Starting process family")
             family = ProcessFamilyForWin32ServiceTests(number_of_child_processes=self.server.num_children)
-            family.start()
-            servicemanager.LogInfoMsg("ProcessFamilyTest started")
             try:
+                family.start()
+                servicemanager.LogInfoMsg("ProcessFamilyTest started")
                 try:
                     logging.info("Starting HTTP server")
                     self.server.run()

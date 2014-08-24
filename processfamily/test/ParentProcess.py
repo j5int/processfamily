@@ -32,8 +32,8 @@ if __name__ == '__main__':
             server = FunkyWebServer()
 
             family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
-            family.start(timeout=10)
             try:
+                family.start(timeout=10)
                 try:
                     server.run()
                 except KeyboardInterrupt:
