@@ -188,6 +188,10 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.assert_middle_child_port_unbound()
         self.send_parent_http_command("stop")
 
+    def test_child_error_during_run(self):
+        self.start_up(test_command='child_error_during_run', wait_for_middle_child=False)
+        self.send_parent_http_command("stop")
+
     def test_child_freeze_on_start(self):
         self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
