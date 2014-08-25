@@ -220,11 +220,13 @@ class ChildProcessProxy(object):
     A proxy to the child process that can be used from the parent process
     """
 
-    def __init__(self, process_instance):
+    def __init__(self, process_instance, echo_std_err):
         self._process_instance = process_instance
-        self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target)
+        self.echo_std_err = echo_std_err
+        if self.echo_std_err:
+            self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target)
+            self._sys_err_thread.start()
         self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
-        self._sys_err_thread.start()
         self._sys_out_thread.start()
         self._rsp_queues_lock = threading.RLock()
         self._rsp_queues = {}
@@ -302,7 +304,8 @@ class ChildProcessProxy(object):
                 logging.error("Exception reading stderr output for processfamily: %s\n%s", e,  _traceback_str())
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
-                time.sleep(1)
+                time.sleep(5)
+        logging.info("Subprocess stderr closed")
 
     def _sys_out_thread_target(self):
         try:
@@ -324,7 +327,8 @@ class ChildProcessProxy(object):
             start_time = time.time()
             while self._process_instance.poll() is None and time.time() - start_time > 5:
                 time.sleep(0.1)
-            self._sys_err_thread.join(5)
+            if self.echo_std_err:
+                self._sys_err_thread.join(5)
             logging.info("Subprocess terminated")
         finally:
             #Unstick any waiting command threads:
@@ -352,6 +356,8 @@ class ProcessFamily(object):
     """
     Manages the launching of a set of child processes
     """
+
+    ECHO_STD_ERR = False
 
     def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=True):
         self.child_process_module_name = child_process_module_name
@@ -417,13 +423,14 @@ class ProcessFamily(object):
         self.child_processes = []
         for i in range(self.number_of_child_processes):
             logging.info("Starting child process %d" % (i+1))
+            FNULL = open(os.devnull, 'w')
             p = subprocess.Popen(
                     self.get_child_process_cmd(i),
                     **self.get_Popen_kwargs(i,
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE))
-            self.child_processes.append(ChildProcessProxy(p))
+                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL))
+            self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR))
 
         logging.info("Waiting for child start events")
         responses = self.send_command_to_all("wait_for_start", timeout=timeout)
