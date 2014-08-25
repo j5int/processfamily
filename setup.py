@@ -26,6 +26,8 @@ setup(
     ],
     install_requires = ["json-rpc"],
     extras_require = {
+        'windows': ['pywin32'],
+        'linux': ['python-prctl'],
         'tests': ['requests'],
         'winservice_tests': ['py2exe'],
     }
