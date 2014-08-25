@@ -35,8 +35,12 @@ class ChildProcessForTests(ChildProcess):
 
     def init(self):
         if test_command == 'child_error_during_init':
+            #Pretend we were actually doing something
+            FunkyWebServer.parse_args_and_setup_logging()
+            logging.info("Child about to fail")
             raise ValueError('I was told to fail')
         elif test_command == 'child_freeze_during_init':
+            FunkyWebServer.parse_args_and_setup_logging()
             hold_gil(10*60)
         self.server = FunkyWebServer()
 
@@ -46,7 +50,8 @@ class ChildProcessForTests(ChildProcess):
         self.server.run()
 
     def stop(self, timeout=None):
-        self.server.stop()
+        if hasattr(self, 'server'):
+            self.server.stop()
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)

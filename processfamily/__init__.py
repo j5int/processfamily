@@ -40,6 +40,13 @@ def _exception_str():
     exc_info = sys.exc_info()
     return "".join(traceback.format_exception_only(exc_info[0], exc_info[1]))
 
+class ExceptionDuringInitialisation(Exception):
+    def __str__(self):
+        return str(self.args[0])
+
+    def __unicode__(self):
+        return unicode(self.args[0])
+
 class ChildProcess(object):
     """
     Subclass this for the implementation of the child process. You must also include an appropriate main entry point.
@@ -50,6 +57,9 @@ class ChildProcess(object):
             start_child_process(MyChildProcess())
 
     """
+
+    #Wait 30 seconds for a "waiting_for_start" message from the parent
+    max_wait_for_waiting_for_start_message = 30
 
     def init(self):
         """
@@ -87,6 +97,7 @@ class _BaseChildProcessHost(object):
         self.command_arg_parser.add_argument('--id', '-i', dest='json_rpc_id')
         self.command_arg_parser.add_argument('--params', '-p', dest='params')
         self._started_event = threading.Event()
+        self._waiting_for_start_event = threading.Event()
         self._stopped_event = threading.Event()
         self.dispatcher = jsonrpc.Dispatcher()
         self.dispatcher["stop"] = self._respond_immediately_for_stop
@@ -116,22 +127,29 @@ class _BaseChildProcessHost(object):
                 raise
             finally:
                 self._started_event.set()
+                if self.child_process.max_wait_for_waiting_for_start_message:
+                    #Wait a couple of seconds for the parent to have sent its message and stuff
+                    self._waiting_for_start_event.wait(self.child_process.max_wait_for_waiting_for_start_message)
 
             if self._should_stop:
                 return
             self.child_process.run()
+        except Exception as e:
+            logging.error("Error during initialisation: %s\n%s", e, _traceback_str())
+            raise
         finally:
             self._stopped_event.set()
 
     def _wait_for_start(self):
+        self._waiting_for_start_event.set()
         self._started_event.wait()
         if self._init_exception is None:
             return 0
         else:
-            raise JSONRPCError(
-                code=30001,
-                message=self._init_exception,
-                data={"traceback": self._init_traceback})
+            #This will return an exception message to the parent
+            raise ExceptionDuringInitialisation(
+                self._init_exception,
+                self._init_traceback)
 
     def _sys_in_thread_target(self):
         should_continue = True
@@ -444,10 +462,13 @@ class ProcessFamily(object):
                         "Child process terminated with response code %d before completing initialisation",
                         self.child_processes[i]._process_instance.poll())
             elif r.get('result', None) is None:
+                args = r['error'].get('data', {}).get('args', [])
+
                 logging.error(
-                    "Child process raised an exception during initialisation: %s\n%s",
-                    r['error'].get('message', "<no error message>"),
-                    r['error'].get('data', {}).get('traceback', "<no traceback>"))
+                    "Child process raised an exception during initialisation: %s: %s\n%s",
+                    r['error']['message'],
+                    r['error'].get('data', {}).get('message', "<no detailed message>"),
+                    args[1] if len(args)>1 else '<no traceback>')
         logging.info("Family started up")
 
     def stop(self, timeout=30):

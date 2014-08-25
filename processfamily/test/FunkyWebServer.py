@@ -118,37 +118,40 @@ class MyHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
 class FunkyWebServer(object):
 
     def __init__(self):
-        arg_parser = argparse.ArgumentParser(description='FunkyWebServer')
-        arg_parser.add_argument('--process_number', type=int)
-        arg_parser.add_argument('--num_children', type=int)
-        args = arg_parser.parse_args()
-        self.process_number = args.process_number or 0
-
-        logsdir = os.path.join(os.path.dirname(__file__), 'tmp', 'logs')
-        if not os.path.exists(logsdir):
-            os.makedirs(logsdir)
-        logFormatter = logging.Formatter('%(asctime)s %(message)s')
-        loghandler = logging.handlers.TimedRotatingFileHandler(os.path.join(logsdir, "process-%02d-log.txt" % self.process_number), when="midnight")
-        loghandler.setFormatter(logFormatter)
-        logger = logging.getLogger()
-        logger.addHandler(loghandler)
-
-        if not sys.platform.startswith('win'):
-            if self.process_number > 0:
-                prctl.set_name('python-pfchild')
-            else:
-                prctl.set_name('python-pfparent')
-
-
-        self.num_children = args.num_children or 3
+        self.parse_args_and_setup_logging()
         port = Config.get_starting_port_nr() + self.process_number
         logging.info("Process %d listening on port %d", self.process_number, port)
         MyHTTPRequestHandler.funkyserver = self
         self.httpd = MyHTTPServer(port)
 
+    @classmethod
+    def parse_args_and_setup_logging(cls):
+        arg_parser = argparse.ArgumentParser(description='FunkyWebServer')
+        arg_parser.add_argument('--process_number', type=int)
+        arg_parser.add_argument('--num_children', type=int)
+        args = arg_parser.parse_args()
+        cls.process_number = args.process_number or 0
+
+        logsdir = os.path.join(os.path.dirname(__file__), 'tmp', 'logs')
+        if not os.path.exists(logsdir):
+            os.makedirs(logsdir)
+        logFormatter = logging.Formatter('%(asctime)s %(message)s')
+        loghandler = logging.handlers.TimedRotatingFileHandler(os.path.join(logsdir, "process-%02d-log.txt" % cls.process_number), when="midnight")
+        loghandler.setFormatter(logFormatter)
+        logger = logging.getLogger()
+        logger.addHandler(loghandler)
+
+        if not sys.platform.startswith('win'):
+            if cls.process_number > 0:
+                prctl.set_name('python-pfchild')
+            else:
+                prctl.set_name('python-pfparent')
+
+        cls.num_children = args.num_children or 3
 
     def run(self):
         self.httpd.serve_forever()
 
     def stop(self):
-        self.httpd.shutdown()
+        if self.httpd:
+            self.httpd.shutdown()
