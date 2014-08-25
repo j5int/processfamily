@@ -86,6 +86,7 @@ import site
                         pass
 
         python_dll = ctypes.util.find_library("Python27.dll")
+        assert python_dll and os.path.exists(python_dll)
         shutil.copy2(python_dll, dest_dir)
 
 def build_service_exe():
