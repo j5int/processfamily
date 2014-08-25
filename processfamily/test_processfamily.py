@@ -10,7 +10,7 @@ import time
 import socket
 import logging
 import glob
-from processfamily.processes import process_exists, kill_process
+from processfamily.processes import process_exists, kill_process, AccessDeniedError
 from processfamily import _traceback_str
 import signal
 import threading
@@ -26,13 +26,31 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         for pid_file in self.get_pid_files():
             with open(pid_file, "r") as f:
                 pid = f.read().strip()
-            if pid and process_exists(int(pid)):
+            if pid and self.process_exists_or_access_denied(int(pid)):
                 logging.warning(
                     ("Process with pid %s is stilling running. This could be a problem " + \
                     "(but it might be a new process with a recycled pid so I'm not killing it).") % pid )
             else:
                 os.remove(pid_file)
         self.check_server_ports_unbound()
+
+    def process_exists_or_access_denied(self, pid):
+        try:
+            return process_exists(pid)
+        except AccessDeniedError as e:
+            #It is most likely that this process does exist!
+            return True
+
+    def kill_process_ignore_access_denied(self, pid):
+        try:
+            return kill_process(pid)
+        except AccessDeniedError as e:
+            #Can't do anything about this
+            pass
+
+    def try_and_stop_everything_for_tear_down(self):
+        #Override this if you can do something about stopping everything
+        pass
 
     def tearDown(self):
         command_file = os.path.join(os.path.dirname(__file__), 'test', 'tmp', 'command.txt')
@@ -48,22 +66,25 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
             with open(pid_file, "r") as f:
                 pid = f.read().strip()
             if pid:
-                while process_exists(int(pid)) and time.time() - start_time < 5:
+                while self.process_exists_or_access_denied(int(pid)) and time.time() - start_time < 5:
                     time.sleep(0.3)
-                if process_exists(int(pid)):
+                if self.process_exists_or_access_denied(int(pid)):
                     processes_left_running.append(int(pid))
             os.remove(pid_file)
 
-        for pid in processes_left_running:
-            try:
-                kill_process(pid)
-            except Exception as e:
-                logging.warning("Error killing process with pid %d: %s", pid, _traceback_str())
+        if processes_left_running:
+            for pid in processes_left_running:
+                try:
+                    self.kill_process_ignore_access_denied(pid)
+                except Exception as e:
+                    logging.warning("Error killing process with pid %d: %s", pid, _traceback_str())
 
-        start_time = time.time()
-        for pid in processes_left_running:
-            while process_exists(int(pid)) and time.time() - start_time < 40:
-                time.sleep(0.3)
+            self.try_and_stop_everything_for_tear_down()
+
+            start_time = time.time()
+            for pid in processes_left_running:
+                while self.process_exists_or_access_denied(int(pid)) and time.time() - start_time < 40:
+                    time.sleep(0.3)
 
         self.check_server_ports_unbound()
         self.assertFalse(processes_left_running, msg="There should have been no PIDs left running but there were: %s" % (', '.join([str(p) for p in processes_left_running])))
@@ -398,6 +419,19 @@ if sys.platform.startswith('win'):
                     done_paths.append(abspath_item)
 
             super(WindowsServiceNetworkServiceUserTests, cls).setUpClass(service_username="NT AUTHORITY\\NetworkService")
+
+        def try_and_stop_everything_for_tear_down(self):
+            try:
+                win32serviceutil.StopService(Config.svc_name)
+                self.wait_for_parent_to_stop(20)
+            except Exception as e:
+                pass
+
+        def test_parent_kill(self):
+            self.skipTest("I cannot kill a network service service from here - I get an access denied error")
+
+        def test_parent_kill_child_locked_up(self):
+            self.skipTest("I cannot kill a network service service from here - I get an access denied error")
 
 
 #Remove the base class from the module dict so it isn't smelled out by nose:
