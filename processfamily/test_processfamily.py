@@ -349,8 +349,10 @@ if sys.platform.startswith('win'):
 
         def test_service_stop_child_freeze_on_start(self):
             self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
+            time.sleep(10) #give us time to 'time out' waiting for the child to start
             self.assert_middle_child_port_unbound()
             win32serviceutil.StopService(Config.svc_name)
+            #This still needs time to wait for the child to stop for 10 seconds:
             self.wait_for_parent_to_stop(11)
 
 

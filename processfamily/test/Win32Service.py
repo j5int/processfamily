@@ -39,8 +39,10 @@ class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
         win32serviceutil.ServiceFramework.__init__(self, args)
 
     def SvcStop(self):
-        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+        #We need 12 seconds = cos we might have to wait 10 for a frozen child
+        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING, waitHint=12000)
         servicemanager.LogInfoMsg("ProcessFamilyTest stopping ..." )
+        logging.info("Stop request received")
         self.server.stop()
 
     def SvcDoRun(self):
@@ -51,7 +53,7 @@ class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
             logging.info("Starting process family")
             family = ProcessFamilyForWin32ServiceTests(number_of_child_processes=self.server.num_children)
             try:
-                family.start()
+                family.start(timeout=10)
                 servicemanager.LogInfoMsg("ProcessFamilyTest started")
                 try:
                     logging.info("Starting HTTP server")
