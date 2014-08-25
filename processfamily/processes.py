@@ -3,6 +3,9 @@ __author__ = 'matth'
 import os
 import sys
 
+class AccessDeniedError(Exception):
+    pass
+
 if sys.platform.startswith("win"):
     import win32api
     import win32con
@@ -25,6 +28,8 @@ if sys.platform.startswith("win"):
             if e.winerror == winerror.ERROR_INVALID_PARAMETER:
                 #This error is returned if the pid doesn't match any known process
                 return False
+            elif e.winerror == winerror.ERROR_ACCESS_DENIED:
+                raise AccessDeniedError(e)
             #Other errors are not expected
             raise
         try:
@@ -40,6 +45,8 @@ if sys.platform.startswith("win"):
             if e.winerror == winerror.ERROR_INVALID_PARAMETER:
                 #This error is returned if the pid doesn't match any known process
                 return
+            elif e.winerror == winerror.ERROR_ACCESS_DENIED:
+                raise AccessDeniedError(e)
             #Other errors are not expected
             raise
         try:
