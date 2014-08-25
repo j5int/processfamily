@@ -349,6 +349,7 @@ if sys.platform.startswith('win'):
 
         @classmethod
         def setUpClass(cls, service_username=None):
+            cls.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
             cls.service_exe = build_service_exe()
             subprocess.check_call([cls.service_exe] + (["--username", service_username] if service_username else []) + ["install"])
 
@@ -395,6 +396,14 @@ if sys.platform.startswith('win'):
             #This still needs time to wait for the child to stop for 10 seconds:
             self.wait_for_parent_to_stop(11)
 
+        @classmethod
+        def send_stop_and_then_wait_for_service_to_stop_ignore_errors(cls):
+            try:
+                win32serviceutil.StopService(Config.svc_name)
+                cls.wait_for_service_to_stop(20)
+            except Exception as e:
+                pass
+
     class WindowsServiceNetworkServiceUserTests(WindowsServiceTests):
 
         @staticmethod
@@ -429,14 +438,6 @@ if sys.platform.startswith('win'):
 
         def try_and_stop_everything_for_tear_down(self):
             self.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
-
-        @classmethod
-        def send_stop_and_then_wait_for_service_to_stop_ignore_errors(cls):
-            try:
-                win32serviceutil.StopService(Config.svc_name)
-                cls.wait_for_service_to_stop(20)
-            except Exception as e:
-                pass
 
         def test_parent_kill(self):
             self.skipTest("I cannot kill a network service service from here - I get an access denied error")
