@@ -2,10 +2,11 @@ __author__ = 'matth'
 import sys
 import os
 from py2exe.build_exe import py2exe as build_exe
-from py2exe.build_exe import FixupTargets, Target
+from py2exe.build_exe import Target
 import tempfile
 import shutil
 import json
+from distutils.dist import Distribution
 
 #These too imports have weird contortions to find DLLs: (look at the source in pywintypes.py)
 #They also do something different if 'frozen' - which is the case when running from the exe
@@ -84,10 +85,14 @@ import site
                         pass
         shutil.copy2(os.path.join(sys.prefix, 'Python27.dll'), dest_dir)
 
-if __name__ == '__main__':
-    from distutils.dist import Distribution
+def build_service_exe():
     dest_dir = os.path.join(os.path.dirname(__file__), "tmp", "bin")
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
 
     my_py2exe(Distribution()).build_exe(dest_dir)
+
+    return os.path.join(dest_dir, 'processfamily-test-svc.exe')
+
+if __name__ == '__main__':
+    build_service_exe()

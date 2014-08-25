@@ -303,6 +303,7 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 if sys.platform.startswith('win'):
     import win32service
     import win32serviceutil
+    from processfamily.test.ExeBuilder import build_service_exe
 
     class PythonWTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
@@ -320,6 +321,16 @@ if sys.platform.startswith('win'):
             self.wait_for_process_to_stop(getattr(self, 'parent_process', None), timeout)
 
     class WindowsServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
+
+        @classmethod
+        def setUpClass(cls):
+            cls.service_exe = build_service_exe()
+            subprocess.check_call([cls.service_exe, "install"])
+
+        @classmethod
+        def tearDownClass(cls):
+            if hasattr(cls, 'service_exe'):
+                subprocess.check_call([cls.service_exe, "remove"])
 
         def start_parent_process(self):
             win32serviceutil.StartService(Config.svc_name)
