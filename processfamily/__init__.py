@@ -13,6 +13,7 @@ import argparse
 import shlex
 import os
 import jsonrpc
+from jsonrpc.exceptions import JSONRPCError
 import Queue
 import pkgutil
 from processfamily.threads import stop_threads
@@ -97,18 +98,40 @@ class _BaseChildProcessHost(object):
         self._stdout_lock = threading.RLock()
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
         self._sys_in_thread.setDaemon(True)
+        self._should_stop = False
+        self._init_exception = None
+        self._init_traceback = None
 
     def run(self):
         #This is in the main thread
-        self._sys_in_thread.start()
-        self.child_process.init()
-        self._started_event.set()
-        self.child_process.run()
-        self._stopped_event.set()
+        try:
+            self._sys_in_thread.start()
+            try:
+                if self._should_stop:
+                    return
+                self.child_process.init()
+            except Exception as e:
+                self._init_exception = _exception_str()
+                self._init_traceback = _traceback_str()
+                raise
+            finally:
+                self._started_event.set()
+
+            if self._should_stop:
+                return
+            self.child_process.run()
+        finally:
+            self._stopped_event.set()
 
     def _wait_for_start(self):
         self._started_event.wait()
-        return 0
+        if self._init_exception is None:
+            return 0
+        else:
+            raise JSONRPCError(
+                code=30001,
+                message=self._init_exception,
+                data={"traceback": self._init_traceback})
 
     def _sys_in_thread_target(self):
         should_continue = True
@@ -129,6 +152,7 @@ class _BaseChildProcessHost(object):
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(1)
+        self._should_stop = True
         self._started_event.wait(1)
         threading.Thread(target=self._stop_thread_target).start()
         self._stopped_event.wait(3)
@@ -142,6 +166,7 @@ class _BaseChildProcessHost(object):
 
     def _respond_immediately_for_stop(self):
         logging.info("Received stop instruction")
+        self._should_stop = True
         return 0
 
     def _send_response(self, rsp):
@@ -418,6 +443,11 @@ class ProcessFamily(object):
                     logging.error(
                         "Child process terminated with response code %d before completing initialisation",
                         self.child_processes[i]._process_instance.poll())
+            elif r.get('result', None) is None:
+                logging.error(
+                    "Child process raised an exception during initialisation: %s\n%s",
+                    r['error'].get('message', "<no error message>"),
+                    r['error'].get('data', {}).get('traceback', "<no traceback>"))
         logging.info("Family started up")
 
     def stop(self, timeout=30):
