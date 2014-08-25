@@ -361,6 +361,10 @@ if sys.platform.startswith('win'):
             win32serviceutil.StartService(Config.svc_name)
 
         def wait_for_parent_to_stop(self, timeout):
+            self.wait_for_service_to_stop(timeout)
+
+        @classmethod
+        def wait_for_service_to_stop(cls, timeout):
             start_time = time.time()
             while time.time()-start_time < timeout:
                 if win32serviceutil.QueryServiceStatus(Config.svc_name)[1] != win32service.SERVICE_STOPPED:
@@ -399,6 +403,9 @@ if sys.platform.startswith('win'):
 
         @classmethod
         def setUpClass(cls):
+            #I do this just in case we left the service running by interrupting the tests
+            cls.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
+
             tmp_dir = os.path.join(os.path.dirname(__file__), 'test', 'tmp')
             if not os.path.exists(tmp_dir):
                 os.makedirs(tmp_dir)
@@ -421,9 +428,13 @@ if sys.platform.startswith('win'):
             super(WindowsServiceNetworkServiceUserTests, cls).setUpClass(service_username="NT AUTHORITY\\NetworkService")
 
         def try_and_stop_everything_for_tear_down(self):
+            self.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
+
+        @classmethod
+        def send_stop_and_then_wait_for_service_to_stop_ignore_errors(cls):
             try:
                 win32serviceutil.StopService(Config.svc_name)
-                self.wait_for_parent_to_stop(20)
+                cls.wait_for_service_to_stop(20)
             except Exception as e:
                 pass
 
