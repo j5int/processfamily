@@ -327,9 +327,9 @@ if sys.platform.startswith('win'):
     class WindowsServiceTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
         @classmethod
-        def setUpClass(cls):
+        def setUpClass(cls, service_username=None):
             cls.service_exe = build_service_exe()
-            subprocess.check_call([cls.service_exe, "install"])
+            subprocess.check_call([cls.service_exe] + (["--username", service_username] if service_username else []) + ["install"])
 
         @classmethod
         def tearDownClass(cls):
@@ -370,6 +370,18 @@ if sys.platform.startswith('win'):
             #This still needs time to wait for the child to stop for 10 seconds:
             self.wait_for_parent_to_stop(11)
 
+    class WindowsServiceNetworkServiceUserTests(WindowsServiceTests):
+
+        @classmethod
+        def setUpClass(cls):
+            tmp_dir = os.path.join(os.path.dirname(__file__), 'test', 'tmp')
+            if not os.path.exists(tmp_dir):
+                os.makedirs(tmp_dir)
+            #Make sure network service has full access to the tmp folder (and these are inheritable)
+            subprocess.check_call(["cmd.exe", "/C", "icacls", tmp_dir, "/grant", "NETWORK SERVICE:(OI)(CI)F"])
+            #And read / execute access to Python, and other folders on the python path:
+            #TODO
+            super(WindowsServiceNetworkServiceUserTests, cls).setUpClass(service_username="NT AUTHORITY\\NetworkService")
 
 
 #Remove the base class from the module dict so it isn't smelled out by nose:
