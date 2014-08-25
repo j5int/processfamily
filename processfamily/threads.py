@@ -109,7 +109,7 @@ def stop_thread(thread, thread_wait=1.0):
     else:
         return forceful_stop_thread(thread)
 
-def filter_threads(threads, current_thread=None, exclude_threads=None):
+def filter_threads(threads, current_thread=None, exclude_threads=None, exclude_thread_fn=None):
     """filters the threads to exclude the current thread (which can be given as a speedup) and other threads if given"""
     if exclude_threads is None:
         exclude_threads = []
@@ -121,7 +121,7 @@ def filter_threads(threads, current_thread=None, exclude_threads=None):
     for exclude_thread in exclude_threads:
         if exclude_thread in remaining_threads:
             remaining_threads.remove(exclude_thread)
-    return remaining_threads
+    return filter(exclude_thread_fn, remaining_threads) if exclude_thread_fn else remaining_threads
 
 def log_thread_tracebacks(threads, stop_event=None, finished_event=None, loglevel=logging.INFO):
     """Logs tracebacks for the given threads"""
@@ -138,11 +138,11 @@ def log_thread_tracebacks(threads, stop_event=None, finished_event=None, logleve
     if finished_event:
         finished_event.set()
 
-def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tracebacks=True):
+def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tracebacks=True, exclude_thread_fn=None):
     """enumerates remaining threads and stops them"""
     current_thread = threading.currentThread()
     def find_stop_threads():
-        return [t for t in filter_threads(threading._active.values(), current_thread, exclude_threads) if t.isAlive()]
+        return [t for t in filter_threads(threading._active.values(), current_thread, exclude_threads, exclude_thread_fn=exclude_thread_fn) if t.isAlive()]
     remaining_threads = find_stop_threads()
     threads_to_stop = []
     for thread in remaining_threads:

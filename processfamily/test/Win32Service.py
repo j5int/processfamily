@@ -69,7 +69,7 @@ class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
             logging.error("Error in windows service: %s\n%s", e, _traceback_str())
         finally:
             logging.info("Stopping")
-            stop_threads()
+            stop_threads(exclude_thread_fn=lambda t: t.getName() != 'MainThread')
         servicemanager.LogInfoMsg("ProcessFamilyTest stopped" )
 
 def usage():
