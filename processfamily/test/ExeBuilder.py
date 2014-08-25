@@ -7,6 +7,7 @@ import tempfile
 import shutil
 import json
 from distutils.dist import Distribution
+import ctypes.util
 
 #These too imports have weird contortions to find DLLs: (look at the source in pywintypes.py)
 #They also do something different if 'frozen' - which is the case when running from the exe
@@ -83,7 +84,9 @@ import site
                         os.remove(f)
                     except:
                         pass
-        shutil.copy2(os.path.join(sys.prefix, 'Python27.dll'), dest_dir)
+
+        python_dll = ctypes.util.find_library("Python27.dll")
+        shutil.copy2(python_dll, dest_dir)
 
 def build_service_exe():
     dest_dir = os.path.join(os.path.dirname(__file__), "tmp", "bin")
