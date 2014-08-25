@@ -27,6 +27,8 @@ if sys.platform.startswith('win'):
 else:
     import prctl
 
+logger = logging.getLogger("processfamily")
+
 def start_child_process(child_process_instance):
     host = _BaseChildProcessHost(child_process_instance)
     host.run()
@@ -114,7 +116,7 @@ class _BaseChildProcessHost(object):
                 return
             self.child_process.run()
         except Exception as e:
-            logging.error("Error: %s\n%s", e, _traceback_str())
+            logger.error("Error: %s\n%s", e, _traceback_str())
             raise
         finally:
             self._stopped_event.set()
@@ -136,9 +138,9 @@ class _BaseChildProcessHost(object):
                     try:
                         should_continue = self._handle_command_line(line)
                     except Exception as e:
-                        logging.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
+                        logger.error("Error handling processfamily command on input: %s\n%s", e,  _traceback_str())
             except Exception as e:
-                logging.error("Exception reading input for processfamily: %s\n%s", e,  _traceback_str())
+                logger.error("Exception reading input for processfamily: %s\n%s", e,  _traceback_str())
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(1)
@@ -156,10 +158,10 @@ class _BaseChildProcessHost(object):
         try:
             self.child_process.stop()
         except Exception as e:
-            logging.error("Error handling processfamily stop command: %s\n%s", e,  _traceback_str())
+            logger.error("Error handling processfamily stop command: %s\n%s", e,  _traceback_str())
 
     def _respond_immediately_for_stop(self):
-        logging.info("Received stop instruction")
+        logger.info("Received stop instruction from parent process")
         self._should_stop = True
         return 0
 
@@ -167,7 +169,7 @@ class _BaseChildProcessHost(object):
         if rsp:
             assert not '\n' in rsp
             with self._stdout_lock:
-                logging.info("Sending response")
+                logger.debug("Sending response: %s", rsp)
                 self.stdout.write("%s\n"%rsp)
                 self.stdout.flush()
 
@@ -189,7 +191,7 @@ class _BaseChildProcessHost(object):
                 request = json.loads(line)
             request_id = json.dumps(request.get("id"))
         except Exception as e:
-            logging.error("Error parsing command string: %s\n%s", e, _traceback_str())
+            logger.error("Error parsing command string: %s\n%s", e, _traceback_str())
             self._send_response('{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}')
             return True
 
@@ -211,7 +213,7 @@ class _BaseChildProcessHost(object):
             if rsp is not None:
                 self._send_response(rsp.json)
         except Exception as e:
-            logging.error("Error handling command string: %s\n%s", e, _traceback_str())
+            logger.error("Error handling command string: %s\n%s", e, _traceback_str())
             self._send_response('{"jsonrpc": "2.0", "error": {"code": 32603, "message": "Error handling request"}, "id": %s}'%request_id)
 
 
@@ -220,7 +222,10 @@ class ChildProcessProxy(object):
     A proxy to the child process that can be used from the parent process
     """
 
-    def __init__(self, process_instance, echo_std_err):
+    def __init__(self, process_instance, echo_std_err, child_index, process_family):
+        self.process_family = process_family
+        self.child_index = child_index
+        self.name = self.process_family.get_child_name(child_index)
         self._process_instance = process_instance
         self.echo_std_err = echo_std_err
         if self.echo_std_err:
@@ -299,13 +304,13 @@ class ChildProcessProxy(object):
                 try:
                     self.handle_sys_err_line(line)
                 except Exception as e:
-                    logging.error("Error handling child process stderr output: %s\n%s", e,  _traceback_str())
+                    logger.error("Error handling %s stderr output: %s\n%s", self.name, e,  _traceback_str())
             except Exception as e:
-                logging.error("Exception reading stderr output for processfamily: %s\n%s", e,  _traceback_str())
+                logger.error("Exception reading stderr output for %s: %s\n%s", self.name, e,  _traceback_str())
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(5)
-        logging.info("Subprocess stderr closed")
+        logger.debug("Subprocess stderr closed")
 
     def _sys_out_thread_target(self):
         try:
@@ -317,19 +322,22 @@ class ChildProcessProxy(object):
                     try:
                         self._handle_response_line(line)
                     except Exception as e:
-                        logging.error("Error handling child process stdout output: %s\n%s", e,  _traceback_str())
+                        logger.error("Error handling %s stdout output: %s\n%s", self.name, e,  _traceback_str())
                 except Exception as e:
-                    logging.error("Exception reading stdout output for processfamily: %s\n%s", e,  _traceback_str())
+                    logger.error("Exception reading stdout output for %s: %s\n%s", self.name, e,  _traceback_str())
                     # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                     # so it might get in to a tight loop which I want to avoid
                     time.sleep(1)
-            logging.info("Subprocess stdout closed - expecting termination")
+            logger.debug("Subprocess stdout closed - expecting termination")
             start_time = time.time()
             while self._process_instance.poll() is None and time.time() - start_time > 5:
                 time.sleep(0.1)
             if self.echo_std_err:
                 self._sys_err_thread.join(5)
-            logging.info("Subprocess terminated")
+            if self._process_instance.poll() is None:
+                logger.error("Stdout stream closed for %s, but process is not terminated (PID:%s)", self.name, self._process_instance.pid)
+            else:
+                logger.info("%s terminated (return code: %d)", self.name, self._process_instance.returncode)
         finally:
             #Unstick any waiting command threads:
             with self._rsp_queues_lock:
@@ -378,6 +386,9 @@ class ProcessFamily(object):
     def get_job_object_name(self):
         return "py_processfamily_%s" % (str(uuid.uuid4()))
 
+    def get_child_name(self, i):
+        return 'Child Process %d' % (i+1)
+
     def _add_to_job_object(self):
         global _global_process_job_handle
         if _global_process_job_handle is not None:
@@ -388,7 +399,7 @@ class ProcessFamily(object):
             raise ValueError("ProcessFamily relies on the parent process NOT being in a job already")
 
         #Create a new job and put us in it before we create any children
-        logging.info("Creating job object and adding parent service to it")
+        logger.debug("Creating job object and adding parent process to it")
         security_attrs = win32security.SECURITY_ATTRIBUTES()
         security_attrs.bInheritHandle = 0
         _global_process_job_handle = win32job.CreateJobObject(security_attrs, self.get_job_object_name())
@@ -396,7 +407,7 @@ class ProcessFamily(object):
         extended_info['BasicLimitInformation']['LimitFlags'] = win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         win32job.SetInformationJobObject(_global_process_job_handle, win32job.JobObjectExtendedLimitInformation, extended_info)
         win32job.AssignProcessToJobObject(_global_process_job_handle, win32api.GetCurrentProcess())
-        logging.info("Added to job object")
+        logger.debug("Added to job object")
 
     def get_Popen_kwargs(self, i, **kwargs):
         if sys.platform.startswith('win'):
@@ -422,47 +433,51 @@ class ProcessFamily(object):
 
         self.child_processes = []
         for i in range(self.number_of_child_processes):
-            logging.info("Starting child process %d" % (i+1))
+            logger.info("Starting %s", self.get_child_name(i))
+            cmd = self.get_child_process_cmd(i)
+            logger.debug("Commandline for %s: %s", self.get_child_name(i), json.dumps(cmd))
             FNULL = open(os.devnull, 'w')
             p = subprocess.Popen(
-                    self.get_child_process_cmd(i),
+                    cmd,
                     **self.get_Popen_kwargs(i,
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL))
-            self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR))
+            self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
 
-        logging.info("Waiting for child start events")
+        logger.debug("Waiting for child start events")
         responses = self.send_command_to_all("wait_for_start", timeout=timeout)
         for i, r in enumerate(responses):
             if r is None:
                 if self.child_processes[i]._process_instance.poll() is None:
-                    logging.error(
-                        "Timed out waiting for child process (%d) to complete initialisation",
+                    logger.error(
+                        "Timed out waiting for %s (PID %d) to complete initialisation",
+                        self.get_child_name(i),
                         self.child_processes[i]._process_instance.pid)
                 else:
-                    logging.error(
-                        "Child process terminated with response code %d before completing initialisation",
+                    logger.error(
+                        "%s terminated with response code %d before completing initialisation",
+                        self.get_child_name(i),
                         self.child_processes[i]._process_instance.poll())
-        logging.info("Family started up")
+        logger.info("All child processes initialised")
 
     def stop(self, timeout=30):
         clean_timeout = timeout - 1
         start_time = time.time()
-        logging.info("Sending stop commands")
+        logger.info("Sending stop commands to child processes")
         self.send_command_to_all("stop", timeout=clean_timeout)
 
-        logging.info("Waiting for child processes to terminate")
+        logger.debug("Waiting for child processes to terminate")
         self._wait_for_children_to_terminate(start_time, clean_timeout)
 
         if self.child_processes:
             #We've nearly run out of time - let's try and kill them:
-            logging.info("Attempting to kill stubborn child processes")
+            logger.debug("Attempting to kill stubborn child processes")
             for p in list(self.child_processes):
                 try:
                     kill_process(p._process_instance.pid)
                 except Exception as e:
-                    logging.warning("Failed to kill child process instance %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
+                    logger.warning("Failed to kill child process with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
             self._wait_for_children_to_terminate(start_time, timeout)
 
     def _wait_for_children_to_terminate(self, start_time, timeout):
