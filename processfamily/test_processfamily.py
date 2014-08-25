@@ -244,15 +244,13 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     if not sys.platform.startswith('win'):
         def test_sigint(self):
-            self.skipTest("These are a bit dicey - they depend on which thread gets the signal")
             self.start_up()
             os.kill(self.parent_process.pid, signal.SIGINT)
 
         def test_sigint_child_locked_up(self):
-            self.skipTest("These are a bit dicey - they depend on which thread gets the signal")
             self.start_up()
-            os.kill(self.parent_process.pid, signal.SIGINT)
             self.freeze_up_middle_child()
+            os.kill(self.parent_process.pid, signal.SIGINT)
             #This needs time to wait for the child for 10 seconds:
             self.wait_for_parent_to_stop(11)
 
