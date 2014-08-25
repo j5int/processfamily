@@ -372,15 +372,31 @@ if sys.platform.startswith('win'):
 
     class WindowsServiceNetworkServiceUserTests(WindowsServiceTests):
 
+        @staticmethod
+        def grant_network_service_rights(folder, rights):
+            subprocess.check_call(["cmd.exe", "/C", "icacls", folder, "/grant", "NETWORK SERVICE:(OI)(CI)%s" % rights])
+
         @classmethod
         def setUpClass(cls):
             tmp_dir = os.path.join(os.path.dirname(__file__), 'test', 'tmp')
             if not os.path.exists(tmp_dir):
                 os.makedirs(tmp_dir)
             #Make sure network service has full access to the tmp folder (and these are inheritable)
-            subprocess.check_call(["cmd.exe", "/C", "icacls", tmp_dir, "/grant", "NETWORK SERVICE:(OI)(CI)F"])
+            cls.grant_network_service_rights(tmp_dir, "F")
             #And read / execute access to Python, and other folders on the python path:
-            #TODO
+            cls.grant_network_service_rights(os.path.abspath(sys.prefix), "RX")
+            done_paths = [os.path.abspath(sys.prefix)]
+            for path_item in sorted(sys.path, key=lambda p: len(os.path.abspath(p))):
+                abspath_item = os.path.abspath(path_item)
+                already_done = False
+                for p in done_paths:
+                    if abspath_item.startswith(p):
+                        already_done = True
+                        break
+                if not already_done:
+                    cls.grant_network_service_rights(abspath_item, "RX")
+                    done_paths.append(abspath_item)
+
             super(WindowsServiceNetworkServiceUserTests, cls).setUpClass(service_username="NT AUTHORITY\\NetworkService")
 
 
