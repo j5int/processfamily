@@ -2,6 +2,8 @@ __author__ = 'matth'
 
 import os
 import sys
+
+test_command = None
 if __name__ == '__main__':
     pid = os.getpid()
     pid_filename = os.path.join(os.path.dirname(__file__), 'tmp', 'pid', 'c%s.pid' % pid)
@@ -22,17 +24,25 @@ if __name__ == '__main__':
             elif command == 'child_crash_on_start':
                 from processfamily.test.FunkyWebServer import crash
                 crash()
+            else:
+                test_command = command
 
 from processfamily import ChildProcess, start_child_process
 import logging
-from processfamily.test.FunkyWebServer import FunkyWebServer
+from processfamily.test.FunkyWebServer import FunkyWebServer, hold_gil
 
 class ChildProcessForTests(ChildProcess):
 
     def init(self):
+        if test_command == 'child_error_during_init':
+            raise ValueError('I was told to fail')
+        elif test_command == 'child_freeze_during_init':
+            hold_gil(10*60)
         self.server = FunkyWebServer()
 
     def run(self):
+        if test_command == 'child_error_during_run':
+            raise ValueError('I was told to fail')
         self.server.run()
 
     def stop(self, timeout=None):
