@@ -3,15 +3,19 @@ __author__ = 'matth'
 import os
 import sys
 
-class AccessDeniedError(Exception):
-    pass
-
 if sys.platform.startswith("win"):
     import win32api
     import win32con
     import win32process
     import pywintypes
     import winerror
+else:
+    import signal
+
+class AccessDeniedError(Exception):
+    pass
+
+if sys.platform.startswith("win"):
 
     #PROCESS_QUERY_LIMITED_INFORMATION is not available on WinXP / 2003:
     USE_PROCESS_QUERY_LIMITED_INFORMATION = sys.getwindowsversion().major > 5
@@ -38,6 +42,18 @@ if sys.platform.startswith("win"):
         finally:
             win32api.CloseHandle(h)
 
+else:
+
+    def process_exists(pid):
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError as e:
+            return False
+
+
+if sys.platform.startswith("win"):
+
     def kill_process(pid):
         try:
             h = win32api.OpenProcess(win32con.PROCESS_TERMINATE, 0, pid)
@@ -54,14 +70,6 @@ if sys.platform.startswith("win"):
         finally:
             win32api.CloseHandle(h)
 else:
-    import signal
-
-    def process_exists(pid):
-        try:
-            os.kill(pid, 0)
-            return True
-        except OSError as e:
-            return False
 
     def kill_process(pid):
         os.kill(pid, signal.SIGKILL)
