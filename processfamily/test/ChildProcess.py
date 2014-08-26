@@ -7,6 +7,8 @@ test_command = None
 if __name__ == '__main__':
     pid = os.getpid()
     pid_filename = os.path.join(os.path.dirname(__file__), 'tmp', 'pid', 'c%s.pid' % pid)
+    if not os.path.exists(os.path.dirname(pid_filename)):
+        os.makedirs(os.path.dirname(pid_filename))
     with open(pid_filename, "w") as pid_f:
         pid_f.write("%s\n" % pid)
     if sys.argv[-1] == '2':
