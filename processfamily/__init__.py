@@ -16,7 +16,7 @@ import jsonrpc
 import Queue
 import pkgutil
 from processfamily.threads import stop_threads
-from processfamily.processes import kill_process
+from processfamily.processes import kill_process, set_processor_affinity, cpu_count
 import signal
 import functools
 
@@ -360,17 +360,31 @@ class ChildProcessProxy(object):
 #being killed
 _global_process_job_handle = None
 
+CPU_AFFINITY_STRATEGY_NONE = 0
+CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
+CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
+
 class ProcessFamily(object):
     """
     Manages the launching of a set of child processes
     """
 
     ECHO_STD_ERR = False
+    CPU_AFFINITY_STRATEGY = CPU_AFFINITY_STRATEGY_PARENT_INCLUDED
 
     def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=True):
         self.child_process_module_name = child_process_module_name
         self.run_as_script = run_as_script
-        self.number_of_child_processes = number_of_child_processes
+
+        if self.CPU_AFFINITY_STRATEGY:
+            self.cpu_count = cpu_count()
+            if number_of_child_processes:
+                self.number_of_child_processes = number_of_child_processes
+            elif self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
+                self.number_of_child_processes = self.cpu_count-1
+            else:
+                self.number_of_child_processes = self.cpu_count
+
         self.child_processes = []
         self._child_process_group_id = None
 
@@ -425,8 +439,20 @@ class ProcessFamily(object):
         os.setpgrp()
         prctl.set_pdeathsig(signal.SIGKILL)
 
+
+    def set_parent_affinity_mask(self):
+        if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
+            set_processor_affinity([0])
+
+    def set_child_affinity_mask(self, pid, child_index):
+        i = child_index+1 if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED else child_index
+        set_processor_affinity([i%self.cpu_count], pid=pid)
+
     def start(self, timeout=30):
         assert not self.child_processes
+
+        if self.CPU_AFFINITY_STRATEGY:
+            self.set_parent_affinity_mask()
 
         if sys.platform.startswith('win'):
             self._add_to_job_object()
@@ -443,6 +469,8 @@ class ProcessFamily(object):
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL))
+            if self.CPU_AFFINITY_STRATEGY:
+                self.set_child_affinity_mask(p.pid, i)
             self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
 
         logger.debug("Waiting for child start events")

@@ -122,12 +122,12 @@ def _create_affinity_mask(mask_or_list):
         mask |= 1 << core
     return mask
 
-def get_process_affinity(pid=None):
+def get_processor_affinity(pid=None):
     """Gets the process_affinity cores either for the current process or the given pid. Returns a list of cores"""
     mask = affinity.get_process_affinity_mask(pid or 0)
     return _affinity_mask_to_list(mask)
 
-def set_process_affinity(mask, pid=None):
+def set_processor_affinity(mask, pid=None):
     """Sets the process_affinity to the given cores, either for the current process or the given pid. mask can be an affinity mask or list of cores. Returns success"""
     mask = _create_affinity_mask(mask)
     pid = pid or 0
