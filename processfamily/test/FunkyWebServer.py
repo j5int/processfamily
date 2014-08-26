@@ -119,10 +119,10 @@ class FunkyWebServer(object):
 
     def __init__(self):
         self.parse_args_and_setup_logging()
-        port = Config.get_starting_port_nr() + self.process_number
-        logging.info("Process %d listening on port %d", self.process_number, port)
+        self.port = Config.get_starting_port_nr() + self.process_number
         MyHTTPRequestHandler.funkyserver = self
-        self.httpd = MyHTTPServer(port)
+        self.httpd_lock = threading.RLock()
+        self.httpd = None
 
     @classmethod
     def parse_args_and_setup_logging(cls):
@@ -150,8 +150,13 @@ class FunkyWebServer(object):
         cls.num_children = args.num_children or 3
 
     def run(self):
+        with self.httpd_lock:
+            self.httpd = MyHTTPServer(self.port)
+        logging.info("Process %d listening on port %d", self.process_number, self.port)
         self.httpd.serve_forever()
 
     def stop(self):
-        if self.httpd:
-            self.httpd.shutdown()
+        with self.httpd_lock:
+            if self.httpd:
+                self.httpd.shutdown()
+                self.httpd = None

@@ -3,6 +3,7 @@ __author__ = 'matth'
 
 from distutils.core import setup
 from setuptools import find_packages
+import sys
 
 setup(
     name='processfamily',
@@ -24,11 +25,8 @@ setup(
         'Programming Language :: Python :: 2 :: Only',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    install_requires = ["json-rpc"],
+    install_requires = ["json-rpc", "affinity"] + (['pywin32'] if sys.platform.startswith("win") else ['python-prctl']),
     extras_require = {
-        'windows': ['pywin32'],
-        'linux': ['python-prctl'],
-        'tests': ['requests'],
-        'winservice_tests': ['py2exe'],
+        'tests': ['nose', 'requests'] + (['py2exe'] if sys.platform.startswith("win") else []),
     }
 )

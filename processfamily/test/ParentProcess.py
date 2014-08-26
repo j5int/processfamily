@@ -14,6 +14,7 @@ from processfamily import ProcessFamily, _traceback_str
 from processfamily.test.FunkyWebServer import FunkyWebServer
 import logging
 from processfamily.threads import stop_threads
+import threading
 
 class ProcessFamilyForTests(ProcessFamily):
     def __init__(self, number_of_child_processes=None, run_as_script=True):
@@ -32,16 +33,23 @@ if __name__ == '__main__':
     try:
         try:
             server = FunkyWebServer()
-
+            server_thread = None
             family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
             try:
-                family.start(timeout=10)
                 try:
-                    server.run()
+                    family.start(timeout=10)
+                    server_thread = threading.Thread(target=server.run)
+                    server_thread.start()
+                    while server_thread.isAlive():
+                        server_thread.join(1)
                 except KeyboardInterrupt:
                     logging.info("Stopping...")
+                    server.stop()
+                finally:
+                    family.stop(timeout=10)
             finally:
-                family.stop(timeout=10)
+                if server_thread and server_thread.isAlive():
+                    server_thread.join(5)
         finally:
             stop_threads()
     except Exception as e:
