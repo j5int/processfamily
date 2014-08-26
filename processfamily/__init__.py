@@ -330,7 +330,7 @@ class ChildProcessProxy(object):
                     time.sleep(1)
             logger.debug("Subprocess stdout closed - expecting termination")
             start_time = time.time()
-            while self._process_instance.poll() is None and time.time() - start_time > 5:
+            while self._process_instance.poll() is None and time.time() - start_time < 5:
                 time.sleep(0.1)
             if self.echo_std_err:
                 self._sys_err_thread.join(5)
