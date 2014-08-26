@@ -81,14 +81,14 @@ if sys.platform.startswith("win"):
         #The multiprocessing cpu_count implementation is flaky on windows - so we do it the windows way
         # (it looks for an environment variable that may not be there)
         (wProcessorArchitecture,
-        dwPageSize,
-        lpMinimumApplicationAddress,
-        lpMaximumApplicationAddress,
-        dwActiveProcessorMask,
-        dwNumberOfProcessors,
-        dwProcessorType,
-        dwAllocationGranularity,
-        (wProcessorLevel,wProcessorRevision)) = win32api.GetSystemInfo()
+            dwPageSize,
+            lpMinimumApplicationAddress,
+            lpMaximumApplicationAddress,
+            dwActiveProcessorMask,
+            dwNumberOfProcessors,
+            dwProcessorType,
+            dwAllocationGranularity,
+            (wProcessorLevel,wProcessorRevision)) = win32api.GetSystemInfo()
         return dwNumberOfProcessors
 
 else:
