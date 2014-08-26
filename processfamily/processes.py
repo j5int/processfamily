@@ -10,6 +10,7 @@ if sys.platform.startswith("win"):
     import pywintypes
     import winerror
 else:
+    import multiprocessing
     import signal
 
 class AccessDeniedError(Exception):
@@ -73,3 +74,24 @@ else:
 
     def kill_process(pid):
         os.kill(pid, signal.SIGKILL)
+
+if sys.platform.startswith("win"):
+
+    def cpu_count():
+        #The multiprocessing cpu_count implementation is flaky on windows - so we do it the windows way
+        # (it looks for an environment variable that may not be there)
+        (wProcessorArchitecture,
+        dwPageSize,
+        lpMinimumApplicationAddress,
+        lpMaximumApplicationAddress,
+        dwActiveProcessorMask,
+        dwNumberOfProcessors,
+        dwProcessorType,
+        dwAllocationGranularity,
+        (wProcessorLevel,wProcessorRevision)) = win32api.GetSystemInfo()
+        return dwNumberOfProcessors
+
+else:
+
+    def cpu_count():
+        return multiprocessing.cpu_count()
