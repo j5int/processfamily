@@ -78,7 +78,7 @@ else:
 if sys.platform.startswith("win"):
 
     def cpu_count():
-        #The multiprocessing cpu_count implementation is flaky on windows - so we do it the windows way
+        #The multiprocessing cpu_count implementation is flaky on windows - so we do it the official windows way
         # (it looks for an environment variable that may not be there)
         (wProcessorArchitecture,
             dwPageSize,
