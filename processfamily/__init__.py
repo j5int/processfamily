@@ -24,8 +24,12 @@ if sys.platform.startswith('win'):
     import win32job
     import win32api
     import win32security
+    from processfamily import _customWinPopen
+    Popen = _customWinPopen.WinPopen
+
 else:
     import prctl
+    Popen = subprocess.Popen
 
 logger = logging.getLogger("processfamily")
 
@@ -463,7 +467,7 @@ class ProcessFamily(object):
             cmd = self.get_child_process_cmd(i)
             logger.debug("Commandline for %s: %s", self.get_child_name(i), json.dumps(cmd))
             FNULL = open(os.devnull, 'w')
-            p = subprocess.Popen(
+            p = Popen(
                     cmd,
                     **self.get_Popen_kwargs(i,
                         stdin=subprocess.PIPE,
