@@ -320,7 +320,7 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
     skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
     def start_parent_process(self):
-        self.parent_process = Popen(
+        self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
             close_fds=True)
         threading.Thread(target=self.parent_process.communicate).start()
@@ -335,14 +335,15 @@ if sys.platform.startswith('win'):
 
     class PythonWTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
-        #TODO: it seems that when I'm not closing file descriptors below, the crash dialog starts popping up again:
+        running_in_pycharm = bool(filter(lambda p: "pycharm" in p.lower(), sys.argv))
         skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
         def start_parent_process(self):
-            self.parent_process = Popen(
+            #TODO: there is something strange here - I cannot connect to the children, if
+            #the tests are running from pycharm, if close_fds is True. Confused.
+            self.parent_process = subprocess.Popen(
                 [Config.pythonw_exe, self.get_path_to_ParentProcessPy()],
-                close_fds=True) #TODO: if I close file descriptors here, then my parent process isn't able to read
-                                 #  it's children's out and err streams - this is a bit mysterious
+                close_fds=False if self.running_in_pycharm else True)
             threading.Thread(target=self.parent_process.communicate).start()
 
         def wait_for_parent_to_stop(self, timeout):
