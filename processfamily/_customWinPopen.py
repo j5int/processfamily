@@ -11,6 +11,11 @@ import subprocess
 import os
 import sys
 
+
+#Relevant python docs:
+# http://bugs.python.org/issue19764
+# http://legacy.python.org/dev/peps/pep-0446/
+
 class WinPopen(subprocess.Popen):
 
     def _execute_child(self, *args_tuple):
@@ -35,8 +40,21 @@ class WinPopen(subprocess.Popen):
         # Always or in the create new process group
         creationflags |= _winprocess_ctypes.CREATE_NEW_PROCESS_GROUP
 
-        if startupinfo is None:
-            startupinfo = _winprocess_ctypes.STARTUPINFO()
+        HandleArray = _winprocess_ctypes.HANDLE * 3
+        handles_to_inherit = HandleArray(int(p2cread), int(c2pwrite), int(errwrite))
+
+        AttributeListData = (
+            (
+                _winprocess_ctypes.PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                handles_to_inherit
+            ),
+        )
+        AttributeList = _winprocess_ctypes.ProcThreadAttributeList(AttributeListData)
+        StartupInfoEx           = _winprocess_ctypes.STARTUPINFOEX()
+        startupinfo             = StartupInfoEx.StartupInfo
+        startupinfo.cb          = _winprocess_ctypes.sizeof(_winprocess_ctypes.STARTUPINFOEX)
+        StartupInfoEx.lpAttributeList = AttributeList.value
+        creationflags |= _winprocess_ctypes.EXTENDED_STARTUPINFO_PRESENT
 
         if None not in (p2cread, c2pwrite, errwrite):
             startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESTDHANDLES
@@ -67,7 +85,7 @@ class WinPopen(subprocess.Popen):
                 creationflags,
                 _winprocess_ctypes.EnvironmentBlock(env) if env else None,
                 cwd,
-                startupinfo)
+                StartupInfoEx)
         finally:
             # Child is launched. Close the parent's copy of those pipe
             # handles that only the child should have open.  You need
