@@ -13,6 +13,7 @@ from types import CodeType
 import json
 import sys
 import ctypes
+from processfamily import _traceback_str
 
 if sys.platform.startswith('win'):
     import win32job
@@ -89,6 +90,21 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             extended_info = win32job.QueryInformationJobObject(None, win32job.JobObjectExtendedLimitInformation)
 
             return json.dumps(extended_info, indent=3)
+        if self.path.startswith('/close_file_and_delete_it'):
+            try:
+                if self.funkyserver._open_file_handle is not None:
+                    f = os.path.join(os.path.dirname(__file__), 'tmp', 'testfile.txt')
+                    logging.info("Closing test file handle")
+                    self.funkyserver._open_file_handle.close()
+                    self.funkyserver._open_file_handle = None
+                    assert os.path.exists(f)
+                    os.remove(f)
+                    assert not os.path.exists(f)
+                    return "OK"
+            except Exception as e:
+                logging.error("Failed to close file handle and delete file: %s\n%s", e, _traceback_str())
+                return "FAIL"
+
         return "OK"
 
     def _to_json_rsp(self, o):
@@ -116,6 +132,8 @@ class MyHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
         BaseHTTPServer.HTTPServer.__init__(self, ("", port), MyHTTPRequestHandler)
 
 class FunkyWebServer(object):
+
+    _open_file_handle = None
 
     def __init__(self):
         self.parse_args_and_setup_logging()
@@ -149,6 +167,10 @@ class FunkyWebServer(object):
 
         cls.num_children = args.num_children or 3
 
+        if cls._open_file_handle is None and cls.process_number == 0:
+            logging.info("Opening a file and keeping it open")
+            cls._open_file_handle = open(os.path.join(os.path.dirname(__file__), 'tmp', 'testfile.txt'), 'w')
+
     def run(self):
         with self.httpd_lock:
             self.httpd = MyHTTPServer(self.port)
@@ -156,7 +178,12 @@ class FunkyWebServer(object):
         self.httpd.serve_forever()
 
     def stop(self):
-        with self.httpd_lock:
-            if self.httpd:
-                self.httpd.shutdown()
-                self.httpd = None
+        try:
+            with self.httpd_lock:
+                if self.httpd:
+                    self.httpd.shutdown()
+                    self.httpd = None
+        finally:
+            if self._open_file_handle is not None:
+                logging.info("Closing test file handle")
+                self._open_file_handle.close()

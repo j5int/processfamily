@@ -254,6 +254,11 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
             #This needs time to wait for the child for 10 seconds:
             self.wait_for_parent_to_stop(11)
 
+    def test_file_open_by_parent_before_fork_can_be_closed_and_deleted(self):
+        self.start_up()
+        result = self.send_parent_http_command("close_file_and_delete_it")
+        self.assertEqual("OK", result, "Command to close file and delete it failed (got response: %s)" % result)
+        self.send_parent_http_command("stop")
 
     def freeze_up_middle_child(self):
         #First check that we can do this fast (i.e. things aren't stuttering because of environment):
@@ -297,7 +302,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def send_http_command(self, port, command, **kwargs):
         r = requests.get('http://localhost:%d/%s' % (port, command), **kwargs)
-        return r.json
+        return r.json()
 
     def wait_for_process_to_stop(self, process, timeout):
         if process is None:
