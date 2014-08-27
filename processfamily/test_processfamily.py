@@ -11,7 +11,7 @@ import socket
 import logging
 import glob
 from processfamily.processes import process_exists, kill_process, AccessDeniedError
-from processfamily import _traceback_str
+from processfamily import _traceback_str, Popen
 import signal
 import threading
 
@@ -320,7 +320,7 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
     skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
     def start_parent_process(self):
-        self.parent_process = subprocess.Popen(
+        self.parent_process = Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
             close_fds=True)
         threading.Thread(target=self.parent_process.communicate).start()
@@ -339,9 +339,9 @@ if sys.platform.startswith('win'):
         skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
         def start_parent_process(self):
-            self.parent_process = subprocess.Popen(
+            self.parent_process = Popen(
                 [Config.pythonw_exe, self.get_path_to_ParentProcessPy()],
-                close_fds=False) #TODO: if I close file descriptors here, then my parent process isn't able to read
+                close_fds=True) #TODO: if I close file descriptors here, then my parent process isn't able to read
                                  #  it's children's out and err streams - this is a bit mysterious
             threading.Thread(target=self.parent_process.communicate).start()
 

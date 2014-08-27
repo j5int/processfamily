@@ -40,32 +40,33 @@ class WinPopen(subprocess.Popen):
         # Always or in the create new process group
         creationflags |= _winprocess_ctypes.CREATE_NEW_PROCESS_GROUP
 
-        HandleArray = _winprocess_ctypes.HANDLE * 3
-        handles_to_inherit = HandleArray(int(p2cread), int(c2pwrite), int(errwrite))
-
-        AttributeListData = (
-            (
-                _winprocess_ctypes.PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-                handles_to_inherit
-            ),
-        )
-        AttributeList = _winprocess_ctypes.ProcThreadAttributeList(AttributeListData)
+        AttributeListData = ()
         StartupInfoEx           = _winprocess_ctypes.STARTUPINFOEX()
         startupinfo             = StartupInfoEx.StartupInfo
         startupinfo.cb          = _winprocess_ctypes.sizeof(_winprocess_ctypes.STARTUPINFOEX)
-        StartupInfoEx.lpAttributeList = AttributeList.value
-        creationflags |= _winprocess_ctypes.EXTENDED_STARTUPINFO_PRESENT
 
         if None not in (p2cread, c2pwrite, errwrite):
+            HandleArray = _winprocess_ctypes.HANDLE * 3
+            handles_to_inherit = HandleArray(int(p2cread), int(c2pwrite), int(errwrite))
+
+            AttributeListData = (
+                (
+                    _winprocess_ctypes.PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                    handles_to_inherit
+                ),
+            )
+
             startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESTDHANDLES
             startupinfo.hStdInput = int(p2cread)
             startupinfo.hStdOutput = int(c2pwrite)
             startupinfo.hStdError = int(errwrite)
+
+        AttributeList = _winprocess_ctypes.ProcThreadAttributeList(AttributeListData)
+        StartupInfoEx.lpAttributeList = AttributeList.value
+        creationflags |= _winprocess_ctypes.EXTENDED_STARTUPINFO_PRESENT
+
         if shell:
-            startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = _winprocess_ctypes.SW_HIDE
-            comspec = os.environ.get("COMSPEC", "cmd.exe")
-            args = comspec + " /c " + args
+            raise NotImplementedError()
 
         def _close_in_parent(fd):
             fd.Close()
@@ -81,7 +82,7 @@ class WinPopen(subprocess.Popen):
             hp, ht, pid, tid = _winprocess_ctypes.CreateProcess(
                 executable, args,
                 None, None, # No special security
-                1, # Must inherit handles!
+                0 if close_fds else 1,
                 creationflags,
                 _winprocess_ctypes.EnvironmentBlock(env) if env else None,
                 cwd,
