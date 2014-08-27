@@ -14,7 +14,6 @@ import sys
 class WinPopen(subprocess.Popen):
 
     def _execute_child(self, *args_tuple):
-        # workaround for bug 950894
         if sys.hexversion < 0x02070600: # prior to 2.7.6
             (args, executable, preexec_fn, close_fds,
              cwd, env, universal_newlines, startupinfo,
@@ -22,7 +21,7 @@ class WinPopen(subprocess.Popen):
              p2cread, p2cwrite,
              c2pread, c2pwrite,
              errread, errwrite) = args_tuple
-            to_close = set()
+            to_close = None
         else: # 2.7.6 and later
             (args, executable, preexec_fn, close_fds,
              cwd, env, universal_newlines, startupinfo,
@@ -50,6 +49,10 @@ class WinPopen(subprocess.Popen):
             comspec = os.environ.get("COMSPEC", "cmd.exe")
             args = comspec + " /c " + args
 
+        def _close_in_parent(fd):
+            fd.Close()
+            if to_close:
+                to_close.remove(fd)
 
         # set process creation flags
         if env:
@@ -73,11 +76,11 @@ class WinPopen(subprocess.Popen):
             # pipe will not close when the child process exits and the
             # ReadFile will hang.
             if p2cread is not None:
-                p2cread.Close()
+                _close_in_parent(p2cread)
             if c2pwrite is not None:
-                c2pwrite.Close()
+                _close_in_parent(c2pwrite)
             if errwrite is not None:
-                errwrite.Close()
+                _close_in_parent(errwrite)
 
         self._child_created = True
         self._handle = hp
