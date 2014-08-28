@@ -10,6 +10,8 @@ from processfamily import _winprocess_ctypes
 import subprocess
 import os
 import sys
+import _subprocess
+import msvcrt
 
 
 #Relevant python docs:
@@ -34,8 +36,6 @@ class WinPopen(subprocess.Popen):
              p2cread, p2cwrite,
              c2pread, c2pwrite,
              errread, errwrite) = args_tuple
-        if not isinstance(args, basestring):
-            args = subprocess.list2cmdline(args)
 
         # Always or in the create new process group
         creationflags |= _winprocess_ctypes.CREATE_NEW_PROCESS_GROUP
@@ -62,10 +62,25 @@ class WinPopen(subprocess.Popen):
                     ),
                 )
 
-            startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESTDHANDLES
-            startupinfo.hStdInput = int(p2cread)
-            startupinfo.hStdOutput = int(c2pwrite)
-            startupinfo.hStdError = int(errwrite)
+                startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESTDHANDLES
+                startupinfo.hStdInput = int(p2cread)
+                startupinfo.hStdOutput = int(c2pwrite)
+                startupinfo.hStdError = int(errwrite)
+            else:
+                curproc = _subprocess.GetCurrentProcess()
+                #pipeouth = msvcrt.get_osfhandle(p2cread)
+                # pipeoutih = _subprocess.DuplicateHandle(
+                #     curproc,
+                #     int(p2cread),
+                #     curproc,
+                #     0,
+                #     1,
+                #     _subprocess.DUPLICATE_SAME_ACCESS)
+
+                print str(int(p2cread))
+                #print str(int(pipeouth))
+
+                args += [str(os.getpid()), str(int(p2cread)), str(int(c2pwrite)), str(int(errwrite))]
 
         if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
             attribute_list = _winprocess_ctypes.ProcThreadAttributeList(attribute_list_data)
@@ -76,7 +91,7 @@ class WinPopen(subprocess.Popen):
             raise NotImplementedError()
 
         def _close_in_parent(fd):
-            fd.Close()
+            #fd.Close()
             if to_close:
                 to_close.remove(fd)
 
@@ -84,12 +99,15 @@ class WinPopen(subprocess.Popen):
         if env:
             creationflags |= _winprocess_ctypes.CREATE_UNICODE_ENVIRONMENT
 
+        if not isinstance(args, basestring):
+            args = subprocess.list2cmdline(args)
+
         # create the process
         try:
             hp, ht, pid, tid = _winprocess_ctypes.CreateProcess(
                 executable, args,
                 None, None, # No special security
-                0 if close_fds else 1,
+                1 if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO else 1, #Inherit handles
                 creationflags,
                 _winprocess_ctypes.EnvironmentBlock(env) if env else None,
                 cwd,

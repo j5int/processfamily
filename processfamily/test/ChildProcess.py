@@ -11,7 +11,7 @@ if __name__ == '__main__':
         os.makedirs(os.path.dirname(pid_filename))
     with open(pid_filename, "w") as pid_f:
         pid_f.write("%s\n" % pid)
-    if sys.argv[-1] == '2':
+    if len(sys.argv) >= 3 and sys.argv[1] == '--process_number' and sys.argv[2] == '2':
         command_file = os.path.join(os.path.dirname(__file__), 'tmp', 'command.txt')
         if os.path.exists(command_file):
             with open(command_file, "r") as f:

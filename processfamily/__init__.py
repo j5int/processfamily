@@ -23,10 +23,14 @@ import functools
 if sys.platform.startswith('win'):
     import win32job
     import win32api
+    import win32con
     import win32security
-    from processfamily import _customWinPopen
-    Popen = _customWinPopen.WinPopen
+    import win32file
+    import msvcrt
 
+    from processfamily import _customWinPopen, _winprocess_ctypes
+    Popen = _customWinPopen.WinPopen
+    CAN_USE_EXTENDED_STARTUPINFO = _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO
 else:
     import prctl
     Popen = subprocess.Popen
@@ -84,6 +88,32 @@ class _ArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         raise ValueError(message)
 
+if sys.platform.startswith('win'):
+    class _Win32File(object):
+
+        def __init__(self, handle):
+            self._handle = handle
+            self._read_buffer = ""
+
+        def write(self, s):
+            (errCode, nBytesWritten) = win32file.WriteFile(self._handle, s)
+
+        def flush(self):
+            win32file.FlushFileBuffers(self._handle)
+
+        def readline(self):
+            while True:
+                eol = self._read_buffer.find("\n")
+                if eol >= 0:
+                    l = self._read_buffer[:eol+1]
+                    self._read_buffer = self._read_buffer[eol+1:]
+                    return l
+                (hr, data) = win32file.ReadFile(self._handle, 1024)
+                if not data:
+                    return ""
+                self._read_buffer += data
+
+
 class _BaseChildProcessHost(object):
     def __init__(self, child_process):
         self.child_process = child_process
@@ -96,10 +126,51 @@ class _BaseChildProcessHost(object):
         self.dispatcher = jsonrpc.Dispatcher()
         self.dispatcher["stop"] = self._respond_immediately_for_stop
         self.dispatcher["wait_for_start"] = self._wait_for_start
-        self.stdin = sys.stdin
+
+        if CAN_USE_EXTENDED_STARTUPINFO:
+            self.stdin = sys.stdin
+            self.stdout = sys.stdout
+        else:
+            assert len(sys.argv) > 5
+            sys.argv, ppid, pipe_handles = sys.argv[:-4], sys.argv[-4], sys.argv[-3:]
+            parent_process = win32api.OpenProcess(win32con.PROCESS_DUP_HANDLE, 0, int(ppid))
+            parent_in_file_handle = int(pipe_handles[0])
+            print parent_in_file_handle
+
+            in_file_handle = win32api.DuplicateHandle(
+                                   parent_process,
+                                   parent_in_file_handle,
+                                   win32api.GetCurrentProcess(),
+                                   0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
+                                   0, #Inheritable
+                                   win32con.DUPLICATE_SAME_ACCESS)
+            print in_file_handle
+            infd = msvcrt.open_osfhandle(in_file_handle, os.O_RDONLY)
+            self.stdin = os.fdopen(infd, 'r')
+
+            # in_file_handle = win32api.DuplicateHandle(
+            #                        parent_process,
+            #                        parent_in_file_handle,
+            #                        win32api.GetCurrentProcess(),
+            #                        0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
+            #                        0, #Inheritable
+            #                        win32con.DUPLICATE_SAME_ACCESS | win32con.DUPLICATE_CLOSE_SOURCE)
+            # self.stdin = _Win32File(in_file_handle)
+
+
+            # parent_out_file_handle = int(pipe_handles[1])
+            # out_file_handle = win32api.DuplicateHandle(parent_process,
+            #                        parent_out_file_handle,
+            #                        win32api.GetCurrentProcess(),
+            #                        0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
+            #                        0, #Inheritable
+            #                        win32con.DUPLICATE_SAME_ACCESS | win32con.DUPLICATE_CLOSE_SOURCE)
+            # self.stdout = _Win32File(out_file_handle)
+            sys.stderr = open(os.devnull, 'w')
+
         sys.stdin = open(os.devnull, 'r')
-        self.stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
+
         self._stdout_lock = threading.RLock()
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
         self._sys_in_thread.setDaemon(True)
