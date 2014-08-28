@@ -335,15 +335,12 @@ if sys.platform.startswith('win'):
 
     class PythonWTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
-        running_in_pycharm = bool(filter(lambda p: "pycharm" in p.lower(), sys.argv))
         skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
         def start_parent_process(self):
-            #TODO: there is something strange here - I cannot connect to the children, if
-            #the tests are running from pycharm, if close_fds is True. Confused.
             self.parent_process = subprocess.Popen(
                 [Config.pythonw_exe, self.get_path_to_ParentProcessPy()],
-                close_fds=False if self.running_in_pycharm else True)
+                close_fds=True)
             threading.Thread(target=self.parent_process.communicate).start()
 
         def wait_for_parent_to_stop(self, timeout):
