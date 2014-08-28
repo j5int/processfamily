@@ -47,7 +47,7 @@ class WinPopen(subprocess.Popen):
             startupinfo.cb          = _winprocess_ctypes.sizeof(_winprocess_ctypes.STARTUPINFOEX)
             startupinfo_argument = startupinfoex
         else:
-            startupinfo = _winprocess_ctypes.STARTUPINFO
+            startupinfo = _winprocess_ctypes.STARTUPINFO()
             startupinfo_argument = startupinfo
 
         if None not in (p2cread, c2pwrite, errwrite):
