@@ -2,7 +2,20 @@
 __author__ = 'matth'
 
 import os
+import sys
 if __name__ == '__main__':
+    #python issue 18298
+    if sys.platform.startswith('win'):
+        #When running under pythonw.exe you can end up with 'invalid' files for stdin+stdout+stder
+        #For this reason, I just open devnull for them
+        # (this was a problem because the HTTPServer tries to write to stderr
+        if sys.stderr.fileno() < 0:
+            sys.stderr = open(os.devnull, "w")
+        if sys.stdout.fileno() < 0:
+            sys.stdout = open(os.devnull, "w")
+        if sys.stdin.fileno() < 0:
+            sys.stdin = open(os.devnull, "r")
+
     pid = os.getpid()
     pid_filename = os.path.join(os.path.dirname(__file__), 'tmp', 'pid', 'p%s.pid' % pid)
     if not os.path.exists(os.path.dirname(pid_filename)):

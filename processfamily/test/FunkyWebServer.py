@@ -14,6 +14,9 @@ import json
 import sys
 import ctypes
 from processfamily import _traceback_str
+import select
+import errno
+import socket
 
 if sys.platform.startswith('win'):
     import win32job
@@ -126,10 +129,32 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.end_headers()
         return True
 
+    def log_message(self, format, *args):
+        """Log an arbitrary message.
+
+        This is used by all other logging functions.  Override
+        it if you have specific logging wishes.
+
+        The first argument, FORMAT, is a format string for the
+        message to be logged.  If the format string contains
+        any % escapes requiring parameters, they should be
+        specified as subsequent arguments (it's just like
+        printf!).
+
+        The client ip address and current date/time are prefixed to every
+        message.
+
+        """
+
+        logging.info("%s - - " + format, self.client_address[0], *args)
+
 class MyHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
     def __init__(self, port):
         MyHTTPRequestHandler.http_server = self
         BaseHTTPServer.HTTPServer.__init__(self, ("", port), MyHTTPRequestHandler)
+
+    def handle_error(self, request, client_address):
+        logging.error('Exception happened during processing of request from %s:\n%s', client_address, _traceback_str())
 
 class FunkyWebServer(object):
 
