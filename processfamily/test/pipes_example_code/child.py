@@ -4,7 +4,6 @@ import os
 import sys
 
 import msvcrt
-import _subprocess
 import win32api
 import win32con
 
@@ -12,12 +11,18 @@ import win32con
 ppid = int(sys.argv[1])
 pipearg = int(sys.argv[2])
 
-curproc = _subprocess.GetCurrentProcess()
+curproc = win32api.GetCurrentProcess()
 parent_process = win32api.OpenProcess(win32con.PROCESS_DUP_HANDLE, 0, int(ppid))
 
-pipeoutih = _subprocess.DuplicateHandle(parent_process, pipearg, curproc, 0, 1,
-        _subprocess.DUPLICATE_SAME_ACCESS)
-pipeoutfd = msvcrt.open_osfhandle(int(pipeoutih), os.O_RDONLY)
+in_file_handle = win32api.DuplicateHandle(
+                       parent_process,
+                       pipearg,
+                       curproc,
+                       0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
+                       0, #Inheritable
+                       win32con.DUPLICATE_SAME_ACCESS | win32con.DUPLICATE_CLOSE_SOURCE)
+
+pipeoutfd = msvcrt.open_osfhandle(int(in_file_handle), os.O_RDONLY)
 
 # Read from pipe
 # Note:  Could be done with os.read/os.close directly, instead of os.fdopen
