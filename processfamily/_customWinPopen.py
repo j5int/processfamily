@@ -40,30 +40,37 @@ class WinPopen(subprocess.Popen):
         # Always or in the create new process group
         creationflags |= _winprocess_ctypes.CREATE_NEW_PROCESS_GROUP
 
-        AttributeListData = ()
-        StartupInfoEx           = _winprocess_ctypes.STARTUPINFOEX()
-        startupinfo             = StartupInfoEx.StartupInfo
-        startupinfo.cb          = _winprocess_ctypes.sizeof(_winprocess_ctypes.STARTUPINFOEX)
+        if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
+            attribute_list_data = ()
+            startupinfoex           = _winprocess_ctypes.STARTUPINFOEX()
+            startupinfo             = startupinfoex.StartupInfo
+            startupinfo.cb          = _winprocess_ctypes.sizeof(_winprocess_ctypes.STARTUPINFOEX)
+            startupinfo_argument = startupinfoex
+        else:
+            startupinfo = _winprocess_ctypes.STARTUPINFO
+            startupinfo_argument = startupinfo
 
         if None not in (p2cread, c2pwrite, errwrite):
-            HandleArray = _winprocess_ctypes.HANDLE * 3
-            handles_to_inherit = HandleArray(int(p2cread), int(c2pwrite), int(errwrite))
+            if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
+                HandleArray = _winprocess_ctypes.HANDLE * 3
+                handles_to_inherit = HandleArray(int(p2cread), int(c2pwrite), int(errwrite))
 
-            AttributeListData = (
-                (
-                    _winprocess_ctypes.PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-                    handles_to_inherit
-                ),
-            )
+                attribute_list_data = (
+                    (
+                        _winprocess_ctypes.PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                        handles_to_inherit
+                    ),
+                )
 
             startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESTDHANDLES
             startupinfo.hStdInput = int(p2cread)
             startupinfo.hStdOutput = int(c2pwrite)
             startupinfo.hStdError = int(errwrite)
 
-        AttributeList = _winprocess_ctypes.ProcThreadAttributeList(AttributeListData)
-        StartupInfoEx.lpAttributeList = AttributeList.value
-        creationflags |= _winprocess_ctypes.EXTENDED_STARTUPINFO_PRESENT
+        if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
+            attribute_list = _winprocess_ctypes.ProcThreadAttributeList(attribute_list_data)
+            startupinfoex.lpAttributeList = attribute_list.value
+            creationflags |= _winprocess_ctypes.EXTENDED_STARTUPINFO_PRESENT
 
         if shell:
             raise NotImplementedError()
@@ -86,7 +93,7 @@ class WinPopen(subprocess.Popen):
                 creationflags,
                 _winprocess_ctypes.EnvironmentBlock(env) if env else None,
                 cwd,
-                StartupInfoEx)
+                startupinfo_argument)
         finally:
             # Child is launched. Close the parent's copy of those pipe
             # handles that only the child should have open.  You need
