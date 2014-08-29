@@ -182,7 +182,6 @@ class _BaseChildProcessHost(object):
         return 0
 
     def _sys_in_thread_target(self):
-        print 'Here sys'
         should_continue = True
         while should_continue:
             try:
@@ -201,7 +200,6 @@ class _BaseChildProcessHost(object):
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(1)
-        print 'Exit sys'
 
         self._should_stop = True
         self._started_event.wait(1)
@@ -530,10 +528,6 @@ class ProcessFamily(object):
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE if self.ECHO_STD_ERR else _customWinPopen.DEVNULL))
-
-            p.stdin.write("HELP\n")
-            p.stdin.flush()
-            print "OK:"+ p.stdout.readline()
 
             if self.CPU_AFFINITY_STRATEGY:
                 self.set_child_affinity_mask(p.pid, i)
