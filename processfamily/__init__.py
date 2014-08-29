@@ -121,9 +121,9 @@ def open_parent_file_handle(parent_process_handle, parent_file_handle, mode='r')
                            win32api.GetCurrentProcess(),
                            0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
                            0, #Inheritable
-                           win32con.DUPLICATE_SAME_ACCESS)# | win32con.DUPLICATE_CLOSE_SOURCE)
-    infd = msvcrt.open_osfhandle(my_file_handle, os.O_RDONLY if mode == 'r' else os.O_WRONLY)
-    return os.fdopen(infd, mode)
+                           win32con.DUPLICATE_SAME_ACCESS | win32con.DUPLICATE_CLOSE_SOURCE)
+    infd = msvcrt.open_osfhandle(int(my_file_handle), os.O_RDONLY if mode == 'r' else os.O_WRONLY)
+    return os.fdopen(infd, mode), my_file_handle
 
 class _BaseChildProcessHost(object):
     def __init__(self, child_process):
@@ -145,21 +145,17 @@ class _BaseChildProcessHost(object):
             assert len(sys.argv) > 5
             sys.argv, ppid, pipe_handles = sys.argv[:-4], sys.argv[-4], sys.argv[-3:]
             parent_process = win32api.OpenProcess(win32con.PROCESS_DUP_HANDLE, 0, int(ppid))
+            self.stdin, self._stdin_handle = open_parent_file_handle(parent_process, int(pipe_handles[0]), 'r')
+            self.stdout, self._stdout_handle = open_parent_file_handle(parent_process, int(pipe_handles[1]), 'w')
+            sys.stderr, self._stderr_handle = open_parent_file_handle(parent_process, int(pipe_handles[2]), 'w')
 
-            self.stdin = open_parent_file_handle(parent_process, int(pipe_handles[0]), 'r')
-            print self.stdin.readline() + ":OK"
-            self.stdout = open_parent_file_handle(parent_process, int(pipe_handles[1]), 'w')
-            self.stdout.write("OK\n")
-            #sys.stderr = open_parent_file_handle(parent_process, int(pipe_handles[2]), 'w')
-
-        #sys.stdin = open(os.devnull, 'r')
-        #sys.stdout = open(os.devnull, 'w')
+        sys.stdin = open(os.devnull, 'r')
+        sys.stdout = open(os.devnull, 'w')
 
         self._stdout_lock = threading.RLock()
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
         self._sys_in_thread.setDaemon(True)
         self._should_stop = False
-        print 'Here'
 
     def run(self):
         #This is in the main thread
@@ -535,7 +531,6 @@ class ProcessFamily(object):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE if self.ECHO_STD_ERR else _customWinPopen.DEVNULL))
 
-            time.sleep(1000)
             p.stdin.write("HELP\n")
             p.stdin.flush()
             print "OK:"+ p.stdout.readline()
