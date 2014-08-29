@@ -113,6 +113,17 @@ if sys.platform.startswith('win'):
                     return ""
                 self._read_buffer += data
 
+def open_parent_file_handle(parent_process_handle, parent_file_handle, mode='r'):
+    assert mode in ['r', 'w']
+    my_file_handle = win32api.DuplicateHandle(
+                           parent_process_handle,
+                           parent_file_handle,
+                           win32api.GetCurrentProcess(),
+                           0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
+                           0, #Inheritable
+                           win32con.DUPLICATE_SAME_ACCESS)# | win32con.DUPLICATE_CLOSE_SOURCE)
+    infd = msvcrt.open_osfhandle(my_file_handle, os.O_RDONLY if mode == 'r' else os.O_WRONLY)
+    return os.fdopen(infd, mode)
 
 class _BaseChildProcessHost(object):
     def __init__(self, child_process):
@@ -134,47 +145,21 @@ class _BaseChildProcessHost(object):
             assert len(sys.argv) > 5
             sys.argv, ppid, pipe_handles = sys.argv[:-4], sys.argv[-4], sys.argv[-3:]
             parent_process = win32api.OpenProcess(win32con.PROCESS_DUP_HANDLE, 0, int(ppid))
-            parent_in_file_handle = int(pipe_handles[0])
-            print parent_in_file_handle
 
-            in_file_handle = win32api.DuplicateHandle(
-                                   parent_process,
-                                   parent_in_file_handle,
-                                   win32api.GetCurrentProcess(),
-                                   0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
-                                   0, #Inheritable
-                                   win32con.DUPLICATE_SAME_ACCESS)
-            print in_file_handle
-            infd = msvcrt.open_osfhandle(in_file_handle, os.O_RDONLY)
-            self.stdin = os.fdopen(infd, 'r')
+            self.stdin = open_parent_file_handle(parent_process, int(pipe_handles[0]), 'r')
+            print self.stdin.readline() + ":OK"
+            self.stdout = open_parent_file_handle(parent_process, int(pipe_handles[1]), 'w')
+            self.stdout.write("OK\n")
+            #sys.stderr = open_parent_file_handle(parent_process, int(pipe_handles[2]), 'w')
 
-            # in_file_handle = win32api.DuplicateHandle(
-            #                        parent_process,
-            #                        parent_in_file_handle,
-            #                        win32api.GetCurrentProcess(),
-            #                        0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
-            #                        0, #Inheritable
-            #                        win32con.DUPLICATE_SAME_ACCESS | win32con.DUPLICATE_CLOSE_SOURCE)
-            # self.stdin = _Win32File(in_file_handle)
-
-
-            # parent_out_file_handle = int(pipe_handles[1])
-            # out_file_handle = win32api.DuplicateHandle(parent_process,
-            #                        parent_out_file_handle,
-            #                        win32api.GetCurrentProcess(),
-            #                        0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
-            #                        0, #Inheritable
-            #                        win32con.DUPLICATE_SAME_ACCESS | win32con.DUPLICATE_CLOSE_SOURCE)
-            # self.stdout = _Win32File(out_file_handle)
-            sys.stderr = open(os.devnull, 'w')
-
-        sys.stdin = open(os.devnull, 'r')
-        sys.stdout = open(os.devnull, 'w')
+        #sys.stdin = open(os.devnull, 'r')
+        #sys.stdout = open(os.devnull, 'w')
 
         self._stdout_lock = threading.RLock()
         self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
         self._sys_in_thread.setDaemon(True)
         self._should_stop = False
+        print 'Here'
 
     def run(self):
         #This is in the main thread
@@ -201,6 +186,7 @@ class _BaseChildProcessHost(object):
         return 0
 
     def _sys_in_thread_target(self):
+        print 'Here sys'
         should_continue = True
         while should_continue:
             try:
@@ -219,6 +205,8 @@ class _BaseChildProcessHost(object):
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
                 time.sleep(1)
+        print 'Exit sys'
+
         self._should_stop = True
         self._started_event.wait(1)
         threading.Thread(target=self._stop_thread_target).start()
@@ -444,7 +432,7 @@ class ProcessFamily(object):
     Manages the launching of a set of child processes
     """
 
-    ECHO_STD_ERR = False
+    ECHO_STD_ERR = True
     CPU_AFFINITY_STRATEGY = CPU_AFFINITY_STRATEGY_PARENT_INCLUDED
 
     def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=True):
@@ -500,6 +488,8 @@ class ProcessFamily(object):
 
     def get_Popen_kwargs(self, i, **kwargs):
         if sys.platform.startswith('win'):
+            kwargs['pass_handles_over_commandline'] = True
+            kwargs['close_fds'] = True
             return kwargs
         else:
 
@@ -543,7 +533,13 @@ class ProcessFamily(object):
                     **self.get_Popen_kwargs(i,
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL))
+                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else _customWinPopen.DEVNULL))
+
+            time.sleep(1000)
+            p.stdin.write("HELP\n")
+            p.stdin.flush()
+            print "OK:"+ p.stdout.readline()
+
             if self.CPU_AFFINITY_STRATEGY:
                 self.set_child_affinity_mask(p.pid, i)
             self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))

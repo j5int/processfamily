@@ -12,13 +12,65 @@ import os
 import sys
 import _subprocess
 import msvcrt
+import time
+import win32file
 
+
+DEVNULL = -3
 
 #Relevant python docs:
 # http://bugs.python.org/issue19764
 # http://legacy.python.org/dev/peps/pep-0446/
-
+    # Windows methods
+    #
 class WinPopen(subprocess.Popen):
+
+
+    def __init__(self, args, bufsize=0, executable=None,
+                 stdin=None, stdout=None, stderr=None,
+                 preexec_fn=None, close_fds=False, shell=False,
+                 cwd=None, env=None, universal_newlines=False,
+                 startupinfo=None, creationflags=0, pass_handles_over_commandline=False):
+
+        self.pass_handles_over_commandline = pass_handles_over_commandline
+        if pass_handles_over_commandline:
+            if not isinstance(bufsize, (int, long)):
+                raise TypeError("bufsize must be an integer")
+
+            #must be all or nothing for now
+            for p in [stdin, stdout, stderr]:
+                if p not in [DEVNULL, subprocess.PIPE]:
+                    raise ValueError("Only PIPE or DEVNULL is supported if pass_handles_over_commandline is True")
+
+            self.commandline_passed = {}
+            for s, p, m in [('stdin', stdin, 'w'), ('stdout', stdout, 'r'), ('stderr', stderr, 'r')]:
+                if p == subprocess.PIPE:
+
+                    if m == 'r':
+                        mode = 'rU' if universal_newlines else 'rb'
+                    else:
+                        mode = 'wb'
+
+                    piperead, pipewrite = os.pipe()
+                    myfile = os.fdopen(pipewrite if m == 'w' else piperead, mode, bufsize)
+                    childhandle = str(int(msvcrt.get_osfhandle(pipewrite if m == 'r' else piperead)))
+                    self.commandline_passed[s] = (myfile, childhandle, piperead, pipewrite)
+                else:
+                    childhandle = str(int(msvcrt.get_osfhandle(open(os.devnull, m))))
+                    self.commandline_passed[s] = (None, childhandle)
+
+            stdin, stdout, stderr = None, None, None
+
+        super(WinPopen, self).__init__(args, bufsize=bufsize, executable=executable,
+                 stdin=stdin, stdout=stdout, stderr=stderr,
+                 preexec_fn=preexec_fn, close_fds=close_fds, shell=shell,
+                 cwd=cwd, env=env, universal_newlines=universal_newlines,
+                 startupinfo=startupinfo, creationflags=creationflags)
+
+        if pass_handles_over_commandline:
+            self.stdin = self.commandline_passed['stdin'][0]
+            self.stdout = self.commandline_passed['stdout'][0]
+            self.stderr = self.commandline_passed['stderr'][0]
 
     def _execute_child(self, *args_tuple):
         if sys.hexversion < 0x02070600: # prior to 2.7.6
@@ -49,9 +101,10 @@ class WinPopen(subprocess.Popen):
         else:
             startupinfo = _winprocess_ctypes.STARTUPINFO()
             startupinfo_argument = startupinfo
+        inherit_handles = 0 if close_fds else 1
 
         if None not in (p2cread, c2pwrite, errwrite):
-            if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
+            if close_fds:
                 HandleArray = _winprocess_ctypes.HANDLE * 3
                 handles_to_inherit = HandleArray(int(p2cread), int(c2pwrite), int(errwrite))
 
@@ -61,26 +114,19 @@ class WinPopen(subprocess.Popen):
                         handles_to_inherit
                     ),
                 )
+                inherit_handles = 1
 
-                startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESTDHANDLES
-                startupinfo.hStdInput = int(p2cread)
-                startupinfo.hStdOutput = int(c2pwrite)
-                startupinfo.hStdError = int(errwrite)
-            else:
-                curproc = _subprocess.GetCurrentProcess()
-                #pipeouth = msvcrt.get_osfhandle(p2cread)
-                # pipeoutih = _subprocess.DuplicateHandle(
-                #     curproc,
-                #     int(p2cread),
-                #     curproc,
-                #     0,
-                #     1,
-                #     _subprocess.DUPLICATE_SAME_ACCESS)
+            startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESTDHANDLES
+            startupinfo.hStdInput = int(p2cread)
+            startupinfo.hStdOutput = int(c2pwrite)
+            startupinfo.hStdError = int(errwrite)
 
-                print str(int(p2cread))
-                #print str(int(pipeouth))
-
-                args += [str(os.getpid()), str(int(p2cread)), str(int(c2pwrite)), str(int(errwrite))]
+        if self.pass_handles_over_commandline:
+            args += [str(os.getpid()),
+                     self.commandline_passed['stdin'][1],
+                     self.commandline_passed['stdout'][1],
+                     self.commandline_passed['stderr'][1],
+                     ]
 
         if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
             attribute_list = _winprocess_ctypes.ProcThreadAttributeList(attribute_list_data)
@@ -91,7 +137,7 @@ class WinPopen(subprocess.Popen):
             raise NotImplementedError()
 
         def _close_in_parent(fd):
-            #fd.Close()
+            fd.Close()
             if to_close:
                 to_close.remove(fd)
 
@@ -107,7 +153,7 @@ class WinPopen(subprocess.Popen):
             hp, ht, pid, tid = _winprocess_ctypes.CreateProcess(
                 executable, args,
                 None, None, # No special security
-                1 if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO else 1, #Inherit handles
+                inherit_handles, #Inherit handles
                 creationflags,
                 _winprocess_ctypes.EnvironmentBlock(env) if env else None,
                 cwd,

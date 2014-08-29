@@ -82,7 +82,7 @@ SIZE_T  = c_size_t
 SSIZE_T = c_ssize_t
 PSIZE_T = POINTER(SIZE_T)
 
-CAN_USE_EXTENDED_STARTUPINFO = sys.getwindowsversion().major > 5
+CAN_USE_EXTENDED_STARTUPINFO = False# sys.getwindowsversion().major > 5
 
 def ErrCheckBool(result, func, args):
     """errcheck function for Windows functions that return a BOOL True
