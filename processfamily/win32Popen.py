@@ -23,6 +23,9 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
     This is achieved by passing the stream handles over the commandline
     and duplicating them manually in the child application.
 
+    In order for this to work, you need to call
+    'open_commandline_passed_stdio_streams()' from the child application.
+
     wait_for_child_stream_duplication_event is the number of seconds to wait for the child
     to duplicate the streams before returning from this method
 
