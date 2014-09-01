@@ -194,17 +194,20 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
     http://legacy.python.org/dev/peps/pep-0446/
     """
 
-    def __init__(self, args, stdin=None, stdout=None, stderr=None, close_fds=False, **kwargs):
+    def __init__(self, args, stdin=None, stdout=None, stderr=None, close_fds=False, shell=False, **kwargs):
         self.__really_close_fds = close_fds
         if close_fds and (stdin is not None or stdout is not None or stderr is not None):
             if not _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
                 raise ValueError("close_fds is not supported on Windows "
                                  "platforms XP/2003 and below, if you redirect stdin/stdout/stderr")
+            if shell:
+                raise ValueError("close_fds is not supported on Windows "
+                                 "if you redirect stdin/stdout/stderr, and use shell=True")
             self.__really_close_fds = True
             close_fds = False
 
         super(ProcThreadAttributeHandleListPopen, self).__init__(
-            args, stdin=stdin, stdout=stdout, stderr=stderr, close_fds=close_fds, **kwargs)
+            args, stdin=stdin, stdout=stdout, stderr=stderr, close_fds=close_fds, shell=shell, **kwargs)
 
 
     # This Source Code Form is subject to the terms of the Mozilla Public
@@ -215,7 +218,7 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
     def _execute_child(self, *args_tuple):
         if sys.hexversion < 0x02070600: # prior to 2.7.6
             (args, executable, preexec_fn, close_fds,
-             cwd, env, universal_newlines, startupinfo,
+             cwd, env, universal_newlines, input_startupinfo,
              creationflags, shell,
              p2cread, p2cwrite,
              c2pread, c2pwrite,
@@ -223,16 +226,19 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
             to_close = None
         else: # 2.7.6 and later
             (args, executable, preexec_fn, close_fds,
-             cwd, env, universal_newlines, startupinfo,
+             cwd, env, universal_newlines, input_startupinfo,
              creationflags, shell, to_close,
              p2cread, p2cwrite,
              c2pread, c2pwrite,
              errread, errwrite) = args_tuple
 
+        if shell:
+            return super(ProcThreadAttributeHandleListPopen, self)._execute_child(*args_tuple)
+
         close_fds = self.__really_close_fds
 
-        # Always or in the create new process group
-        creationflags |= _winprocess_ctypes.CREATE_NEW_PROCESS_GROUP
+        if not isinstance(args, basestring):
+            args = subprocess.list2cmdline(args)
 
         if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
             attribute_list_data = ()
@@ -243,6 +249,14 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
         else:
             startupinfo = _winprocess_ctypes.STARTUPINFO()
             startupinfo_argument = startupinfo
+
+        if input_startupinfo is not None:
+            startupinfo.dwFlags = input_startupinfo.dwFlags
+            startupinfo.hStdInput = input_startupinfo.hStdInput
+            startupinfo.hStdOutput = input_startupinfo.hStdOutput
+            startupinfo.hStdError = input_startupinfo.hStdError
+            startupinfo.wShowWindow = input_startupinfo.wShowWindow
+
         inherit_handles = 0 if close_fds else 1
 
         if None not in (p2cread, c2pwrite, errwrite):
@@ -268,20 +282,10 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
             startupinfoex.lpAttributeList = attribute_list.value
             creationflags |= _winprocess_ctypes.EXTENDED_STARTUPINFO_PRESENT
 
-        if shell:
-            raise NotImplementedError()
-
         def _close_in_parent(fd):
             fd.Close()
             if to_close:
                 to_close.remove(fd)
-
-        # set process creation flags
-        if env:
-            creationflags |= _winprocess_ctypes.CREATE_UNICODE_ENVIRONMENT
-
-        if not isinstance(args, basestring):
-            args = subprocess.list2cmdline(args)
 
         # create the process
         try:
