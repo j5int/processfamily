@@ -80,8 +80,16 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
         self.stdout = self.commandline_passed['stdout'][0]
         self.stderr = self.commandline_passed['stderr'][0]
 
+    def poll(self, *args, **kwargs):
+        self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self).poll(*args, **kwargs))
+
+    def wait(self, *args, **kwargs):
+        self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self).wait(*args, **kwargs))
+
     def _internal_poll(self, *args, **kwargs):
-        r = super(HandlesOverCommandLinePopen, self)._internal_poll( *args, **kwargs)
+        self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self)._internal_poll( *args, **kwargs))
+
+    def _cleanup_on_returncode(self, r):
         if r is not None:
             while self._cleanup_on_terminate:
                 c = self._cleanup_on_terminate.pop(-1)
@@ -90,6 +98,7 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
                 except:
                     pass
         return r
+
 
 
 class _ParentPassedFile(object):
