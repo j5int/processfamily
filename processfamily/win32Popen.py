@@ -7,6 +7,7 @@ import sys
 import msvcrt
 import win32api
 import win32con
+import win32event
 
 class HandlesOverCommandLinePopen(subprocess.Popen):
     """
@@ -66,7 +67,10 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
 
                 self.commandline_passed[s] = (None, str(int(childhandle)), childhandle, p)
 
+        self._wait_for_child_duplication_event = win32event.CreateEvent(None, 0, 0, None)
+
         args += [str(os.getpid()),
+                 str(int(self._wait_for_child_duplication_event)),
                  self.commandline_passed['stdin'][1],
                  self.commandline_passed['stdout'][1],
                  self.commandline_passed['stderr'][1],
@@ -75,6 +79,8 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
         super(HandlesOverCommandLinePopen, self).__init__(args, bufsize=bufsize,
                  stdin=None, stdout=None, stderr=None,
                  close_fds=close_fds, universal_newlines=universal_newlines, **kwargs)
+
+        r = win32event.WaitForSingleObject(self._wait_for_child_duplication_event, 5000)
 
         self.stdin = self.commandline_passed['stdin'][0]
         self.stdout = self.commandline_passed['stdout'][0]
@@ -127,8 +133,16 @@ def open_commandline_passed_stdio_streams(args=None):
     a = args or sys.argv
 
     assert len(a) > 5
-    a, ppid, pipe_handles = a[:-4], a[-4], a[-3:]
+    a, ppid, event_handle_s, pipe_handles = a[:-5], a[-5], a[-4], a[-3:]
     parent_process = win32api.OpenProcess(win32con.PROCESS_DUP_HANDLE, 0, int(ppid))
+    event_handle = win32api.DuplicateHandle(
+                       parent_process,
+                       int(event_handle_s),
+                       win32api.GetCurrentProcess(),
+                       0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
+                       0, #Inheritable
+                       win32con.DUPLICATE_SAME_ACCESS)
+
     if pipe_handles[0] != 'null':
         sys.stdin = _open_parent_file_handle(parent_process, int(pipe_handles[0]), 'r')
     if pipe_handles[1] != 'null':
@@ -138,6 +152,8 @@ def open_commandline_passed_stdio_streams(args=None):
 
     if args is None:
         sys.argv = a
+
+    win32event.SetEvent(event_handle)
 
 
 class ProcThreadAttributeHandleListPopen(subprocess.Popen):
