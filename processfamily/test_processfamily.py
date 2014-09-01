@@ -417,6 +417,9 @@ if sys.platform.startswith('win'):
             if hasattr(cls, 'service_exe'):
                 subprocess.check_call([cls.service_exe, "remove"])
 
+        def try_and_stop_everything_for_tear_down(self):
+            self.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
+
         def start_parent_process(self):
             win32serviceutil.StartService(Config.svc_name)
 
@@ -493,9 +496,6 @@ if sys.platform.startswith('win'):
                     done_paths.append(abspath_item)
 
             super(WindowsServiceNetworkServiceUserTests, cls).setUpClass(service_username="NT AUTHORITY\\NetworkService")
-
-        def try_and_stop_everything_for_tear_down(self):
-            self.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
 
         def test_parent_kill(self):
             self.skipTest("I cannot kill a network service service from here - I get an access denied error")
