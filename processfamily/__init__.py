@@ -28,8 +28,10 @@ if sys.platform.startswith('win'):
     import win32file
     import msvcrt
 
-    from processfamily import Popen, _winprocess_ctypes
-    Popen = Popen.WinPopen
+    from processfamily import win32Popen
+    from processfamily import _winprocess_ctypes
+
+    Popen = win32Popen.HandlesOverCommandLinePopen
     CAN_USE_EXTENDED_STARTUPINFO = _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO
 else:
     import prctl
@@ -482,7 +484,6 @@ class ProcessFamily(object):
 
     def get_Popen_kwargs(self, i, **kwargs):
         if sys.platform.startswith('win'):
-            kwargs['pass_handles_over_commandline'] = True
             kwargs['close_fds'] = True
             return kwargs
         else:
