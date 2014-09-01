@@ -23,7 +23,7 @@ if __name__ == '__main__':
     with open(pid_filename, "w") as pid_f:
         pid_f.write("%s\n" % pid)
 
-from processfamily import ProcessFamily, _traceback_str, CHILD_COMMS_STRATEGY_STDIN_CLOSE, CHILD_COMMS_STRATEGY_NONE
+from processfamily import ProcessFamily, _traceback_str, CHILD_COMMS_STRATEGY_PIPES_CLOSE, CHILD_COMMS_STRATEGY_NONE
 from processfamily.test.FunkyWebServer import FunkyWebServer
 import logging
 from processfamily.threads import stop_threads
@@ -57,7 +57,7 @@ class ProcessFamilyForTests(ProcessFamily):
                 self.CPU_AFFINITY_STRATEGY = None
             elif command == 'use_cat' or command == 'use_cat_comms_none':
                 self.WIN_PASS_HANDLES_OVER_COMMANDLINE = False
-                self.CHILD_COMMS_STRATEGY = CHILD_COMMS_STRATEGY_STDIN_CLOSE if command == 'use_cat' else CHILD_COMMS_STRATEGY_NONE
+                self.CHILD_COMMS_STRATEGY = CHILD_COMMS_STRATEGY_PIPES_CLOSE if command == 'use_cat' else CHILD_COMMS_STRATEGY_NONE
                 if sys.platform.startswith('win'):
                     self.override_command_line = [os.path.join(os.path.dirname(__file__), 'win32', 'cat.exe')]
                 else:

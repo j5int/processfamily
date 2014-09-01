@@ -232,6 +232,7 @@ class ChildProcessProxy(object):
     def __init__(self, process_instance, echo_std_err, child_index, process_family):
         self.process_family = process_family
         self.child_index = child_index
+        self.comms_strategy = process_family.CHILD_COMMS_STRATEGY
         self.name = self.process_family.get_child_name(child_index)
         self._process_instance = process_instance
 
@@ -243,8 +244,9 @@ class ChildProcessProxy(object):
         if self.echo_std_err:
             self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target)
             self._sys_err_thread.start()
-        self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
-        self._sys_out_thread.start()
+        if self.comms_strategy:
+            self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
+            self._sys_out_thread.start()
 
     def send_command(self, command, timeout, params=None):
         response_id = str(uuid.uuid4())
@@ -326,7 +328,10 @@ class ChildProcessProxy(object):
                     if not line:
                         break
                     try:
-                        self._handle_response_line(line)
+                        if self.comms_strategy == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
+                            self._handle_response_line(line)
+                        else:
+                            self.process_family.handle_sys_out_line(line)
                     except Exception as e:
                         logger.error("Error handling %s stdout output: %s\n%s", self.name, e,  _traceback_str())
                 except Exception as e:
@@ -371,7 +376,7 @@ CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
 CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
 
 CHILD_COMMS_STRATEGY_NONE = 0
-CHILD_COMMS_STRATEGY_STDIN_CLOSE = 1
+CHILD_COMMS_STRATEGY_PIPES_CLOSE = 1
 CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL = 2
 
 class ProcessFamily(object):
@@ -421,6 +426,12 @@ class ProcessFamily(object):
 
     def handle_sys_err_line(self, child_index, line):
         sys.stderr.write(line)
+
+    def handle_sys_out_line(self, child_index, line):
+        """
+        This is only relevant if CHILD_COMMS_STRATEGY_PIPES_CLOSE is used
+        """
+        pass
 
     def _add_to_job_object(self):
         global _global_process_job_handle
@@ -543,7 +554,7 @@ class ProcessFamily(object):
             if self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
                 logger.info("Sending stop commands to child processes")
                 self.send_command_to_all("stop", timeout=clean_timeout)
-            elif self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_STDIN_CLOSE:
+            elif self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PIPES_CLOSE:
                 logger.info("Closing input streams of child processes")
                 for p in list(self.child_processes):
                     try:
