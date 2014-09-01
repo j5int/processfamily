@@ -45,6 +45,11 @@ class ProcessFamilyForTests(ProcessFamily):
                 self.ECHO_STD_ERR = True
             elif command == 'handles_over_commandline_off':
                 self.WIN_PASS_HANDLES_OVER_COMMANDLINE = False
+            elif command == 'handles_over_commandline_off_close_fds_off':
+                self.WIN_PASS_HANDLES_OVER_COMMANDLINE = False
+                self.CLOSE_FDS = False
+            elif command == 'close_fds_off':
+                self.CLOSE_FDS = False
             elif command == 'use_job_object_off':
                 self.WIN_USE_JOB_OBJECT = False
             elif command == 'cpu_affinity_off':

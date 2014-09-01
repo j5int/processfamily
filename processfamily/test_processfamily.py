@@ -267,6 +267,18 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up(test_command='handles_over_commandline_off')
         self.send_parent_http_command("stop")
 
+    def test_handles_over_commandline_off_close_fds_off(self):
+        self.start_up(test_command='handles_over_commandline_off_close_fds_off')
+        result = self.send_parent_http_command("close_file_and_delete_it")
+        self.assertEqual("FAIL", result, "Command to close file and delete it did not fail (got response: %s)" % result)
+        self.send_parent_http_command("stop")
+
+    def test_close_fds_off(self):
+        self.start_up(test_command='close_fds_off')
+        result = self.send_parent_http_command("close_file_and_delete_it")
+        self.assertEqual("FAIL", result, "Command to close file and delete it did not fail (got response: %s)" % result)
+        self.send_parent_http_command("stop")
+
     def test_use_job_object_off(self):
         self.start_up(test_command='use_job_object_off')
         self.send_parent_http_command("stop")
