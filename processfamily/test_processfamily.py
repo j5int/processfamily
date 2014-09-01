@@ -11,7 +11,6 @@ import socket
 import logging
 import glob
 from processfamily.processes import process_exists, kill_process, AccessDeniedError
-from processfamily import _traceback_str, Popen
 import signal
 import threading
 
@@ -258,6 +257,10 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("OK", result, "Command to close file and delete it failed (got response: %s)" % result)
+        self.send_parent_http_command("stop")
+
+    def test_echo_std_err_on(self):
+        self.start_up(test_command='echo_std_err')
         self.send_parent_http_command("stop")
 
     def freeze_up_middle_child(self):

@@ -35,6 +35,15 @@ class ProcessFamilyForTests(ProcessFamily):
             child_process_module_name='processfamily.test.ChildProcess',
             number_of_child_processes=number_of_child_processes,
             run_as_script=run_as_script)
+        command_file = os.path.join(os.path.dirname(__file__), 'tmp', 'command.txt')
+        if os.path.exists(command_file):
+            with open(command_file, "r") as f:
+                command = f.read()
+            if command == 'echo_std_err':
+                self.ECHO_STD_ERR = True
+
+    def handle_sys_err_line(self, child_index, line):
+        logging.info("SYSERR: %d: %s", child_index+1, line.strip())
 
     def get_child_process_cmd(self, child_number):
         return super(ProcessFamilyForTests, self).get_child_process_cmd(child_number) + [

@@ -328,9 +328,6 @@ class ChildProcessProxy(object):
             if self._rsp_queues is not None:
                 self._rsp_queues.pop(response_id, None)
 
-    def handle_sys_err_line(self, line):
-        sys.stderr.write(line)
-
     def _sys_err_thread_target(self):
         while True:
             try:
@@ -338,7 +335,7 @@ class ChildProcessProxy(object):
                 if not line:
                     break
                 try:
-                    self.handle_sys_err_line(line)
+                    self.process_family.handle_sys_err_line(self.child_index, line)
                 except Exception as e:
                     logger.error("Error handling %s stderr output: %s\n%s", self.name, e,  _traceback_str())
             except Exception as e:
@@ -443,6 +440,9 @@ class ProcessFamily(object):
 
     def get_child_name(self, i):
         return 'Child Process %d' % (i+1)
+
+    def handle_sys_err_line(self, child_index, line):
+        sys.stderr.write(line)
 
     def _add_to_job_object(self):
         global _global_process_job_handle
