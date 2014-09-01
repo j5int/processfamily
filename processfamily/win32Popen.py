@@ -8,64 +8,49 @@ import msvcrt
 
 DEVNULL = -3
 
-#Relevant python docs:
-# http://bugs.python.org/issue19764
-# http://legacy.python.org/dev/peps/pep-0446/
-
-class WinPopen(subprocess.Popen):
+class HandlesOverCommandLinePopen(subprocess.Popen):
 
 
-    def __init__(self, args, bufsize=0, executable=None,
-                 stdin=None, stdout=None, stderr=None,
-                 preexec_fn=None, close_fds=False, shell=False,
-                 cwd=None, env=None, universal_newlines=False,
-                 startupinfo=None, creationflags=0, pass_handles_over_commandline=False):
+    def __init__(self, args,  bufsize=0, stdin=None, stdout=None, stderr=None,
+                 universal_newlines=False, close_fds=False, **kwargs):
+        if not isinstance(bufsize, (int, long)):
+            raise TypeError("bufsize must be an integer")
 
-        self.pass_handles_over_commandline = pass_handles_over_commandline
-        if pass_handles_over_commandline:
-            if not isinstance(bufsize, (int, long)):
-                raise TypeError("bufsize must be an integer")
+        #must be all or nothing for now
+        for p in [stdin, stdout, stderr]:
+            if p not in [DEVNULL, subprocess.PIPE]:
+                raise ValueError("Only PIPE or DEVNULL is supported if pass_handles_over_commandline is True")
 
-            #must be all or nothing for now
-            for p in [stdin, stdout, stderr]:
-                if p not in [DEVNULL, subprocess.PIPE]:
-                    raise ValueError("Only PIPE or DEVNULL is supported if pass_handles_over_commandline is True")
+        self.commandline_passed = {}
+        for s, p, m in [('stdin', stdin, 'w'), ('stdout', stdout, 'r'), ('stderr', stderr, 'r')]:
+            if p == subprocess.PIPE:
 
-            self.commandline_passed = {}
-            for s, p, m in [('stdin', stdin, 'w'), ('stdout', stdout, 'r'), ('stderr', stderr, 'r')]:
-                if p == subprocess.PIPE:
-
-                    if m == 'r':
-                        mode = 'rU' if universal_newlines else 'rb'
-                    else:
-                        mode = 'wb'
-
-                    piperead, pipewrite = os.pipe()
-                    myfile = os.fdopen(pipewrite if m == 'w' else piperead, mode, bufsize)
-                    childhandle = str(int(msvcrt.get_osfhandle(pipewrite if m == 'r' else piperead)))
-                    self.commandline_passed[s] = (myfile, childhandle, piperead, pipewrite)
+                if m == 'r':
+                    mode = 'rU' if universal_newlines else 'rb'
                 else:
-                    childhandle = str(int(msvcrt.get_osfhandle(open(os.devnull, m))))
-                    self.commandline_passed[s] = (None, childhandle)
+                    mode = 'wb'
 
-            args += [str(os.getpid()),
-                     self.commandline_passed['stdin'][1],
-                     self.commandline_passed['stdout'][1],
-                     self.commandline_passed['stderr'][1],
-                     ]
+                piperead, pipewrite = os.pipe()
+                myfile = os.fdopen(pipewrite if m == 'w' else piperead, mode, bufsize)
+                childhandle = str(int(msvcrt.get_osfhandle(pipewrite if m == 'r' else piperead)))
+                self.commandline_passed[s] = (myfile, childhandle, piperead, pipewrite)
+            else:
+                childhandle = str(int(msvcrt.get_osfhandle(open(os.devnull, m))))
+                self.commandline_passed[s] = (None, childhandle)
 
-            stdin, stdout, stderr = None, None, None
+        args += [str(os.getpid()),
+                 self.commandline_passed['stdin'][1],
+                 self.commandline_passed['stdout'][1],
+                 self.commandline_passed['stderr'][1],
+                 ]
 
-        super(WinPopen, self).__init__(args, bufsize=bufsize, executable=executable,
-                 stdin=stdin, stdout=stdout, stderr=stderr,
-                 preexec_fn=preexec_fn, close_fds=close_fds, shell=shell,
-                 cwd=cwd, env=env, universal_newlines=universal_newlines,
-                 startupinfo=startupinfo, creationflags=creationflags)
+        super(HandlesOverCommandLinePopen, self).__init__(args, bufsize=bufsize,
+                 stdin=None, stdout=None, stderr=None,
+                 close_fds=close_fds, universal_newlines=universal_newlines)
 
-        if pass_handles_over_commandline:
-            self.stdin = self.commandline_passed['stdin'][0]
-            self.stdout = self.commandline_passed['stdout'][0]
-            self.stderr = self.commandline_passed['stderr'][0]
+        self.stdin = self.commandline_passed['stdin'][0]
+        self.stdout = self.commandline_passed['stdout'][0]
+        self.stderr = self.commandline_passed['stderr'][0]
 
 
 class ProcThreadAttributeHandleListPopen(subprocess.Popen):
@@ -77,6 +62,10 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
     implementation.
 
     Please note that this functionality requires Windows version > XP/2003.
+
+    Relevant python docs:
+    http://bugs.python.org/issue19764
+    http://legacy.python.org/dev/peps/pep-0446/
     """
 
     def __init__(self, args, stdin=None, stdout=None, stderr=None, close_fds=False, **kwargs):
