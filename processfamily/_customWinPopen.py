@@ -1,28 +1,17 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this file,
-# You can obtain one at http://mozilla.org/MPL/2.0/.
-#
-# It is a snippet taken from : https://hg.mozilla.org/mozilla-central/raw-file/0753f7b93ab7/testing/mozbase/mozprocess/mozprocess/processhandler.py
-
 __author__ = 'matth'
 
 from processfamily import _winprocess_ctypes
 import subprocess
 import os
 import sys
-import _subprocess
 import msvcrt
-import time
-import win32file
-
 
 DEVNULL = -3
 
 #Relevant python docs:
 # http://bugs.python.org/issue19764
 # http://legacy.python.org/dev/peps/pep-0446/
-    # Windows methods
-    #
+
 class WinPopen(subprocess.Popen):
 
 
