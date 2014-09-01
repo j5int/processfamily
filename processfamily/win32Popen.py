@@ -67,6 +67,36 @@ class WinPopen(subprocess.Popen):
             self.stdout = self.commandline_passed['stdout'][0]
             self.stderr = self.commandline_passed['stderr'][0]
 
+
+class ProcThreadAttributeHandleListPopen(subprocess.Popen):
+    """
+    Uses the STARTUPINFOEX struct to pass through an explicit list of
+    handles to inherit. This is used to more closely match the behaviour
+    on linux when the input and output streams are redirected, but you
+    want close_fds to be True. (This is 'not supported' in the standard
+    implementation.
+
+    Please note that this functionality requires Windows version > XP/2003.
+    """
+
+    def __init__(self, args, stdin=None, stdout=None, stderr=None, close_fds=False, **kwargs):
+        self.__really_close_fds = close_fds
+        if close_fds and (stdin is not None or stdout is not None or stderr is not None):
+            if not _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
+                raise ValueError("close_fds is not supported on Windows "
+                                 "platforms XP/2003 and below, if you redirect stdin/stdout/stderr")
+            self.__really_close_fds = True
+            close_fds = False
+
+        super(ProcThreadAttributeHandleListPopen, self).__init__(
+            args, stdin=stdin, stdout=stdout, stderr=stderr, close_fds=close_fds, **kwargs)
+
+
+    # This Source Code Form is subject to the terms of the Mozilla Public
+    # License, v. 2.0. If a copy of the MPL was not distributed with this file,
+    # You can obtain one at http://mozilla.org/MPL/2.0/.
+    #
+    # This snippet is a modified method taken from : https://hg.mozilla.org/mozilla-central/raw-file/0753f7b93ab7/testing/mozbase/mozprocess/mozprocess/processhandler.py
     def _execute_child(self, *args_tuple):
         if sys.hexversion < 0x02070600: # prior to 2.7.6
             (args, executable, preexec_fn, close_fds,
@@ -83,6 +113,8 @@ class WinPopen(subprocess.Popen):
              p2cread, p2cwrite,
              c2pread, c2pwrite,
              errread, errwrite) = args_tuple
+
+        close_fds = self.__really_close_fds
 
         # Always or in the create new process group
         creationflags |= _winprocess_ctypes.CREATE_NEW_PROCESS_GROUP
