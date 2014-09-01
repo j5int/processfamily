@@ -469,6 +469,7 @@ class ProcessFamily(object):
     def get_Popen_kwargs(self, i, **kwargs):
         if sys.platform.startswith('win'):
             kwargs['close_fds'] = True
+            kwargs['timeout_for_child_stream_duplication_event'] = None
             return kwargs
         else:
 
@@ -494,6 +495,7 @@ class ProcessFamily(object):
 
     def start(self, timeout=30):
         assert not self.child_processes
+        s = time.time()
 
         if self.CPU_AFFINITY_STRATEGY:
             self.set_parent_affinity_mask()
@@ -521,8 +523,14 @@ class ProcessFamily(object):
                     logging.error("Unable to set affinity for process %d: %s", p.pid, e)
             self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
 
+        if sys.platform.startswith('win'):
+            logger.debug("Waiting for child stream duplication events")
+            for c in self.child_processes:
+                c._process_instance.wait_for_child_stream_duplication_event(timeout=timeout-(time.time()-s)-3)
+
+
         logger.debug("Waiting for child start events")
-        responses = self.send_command_to_all("wait_for_start", timeout=timeout)
+        responses = self.send_command_to_all("wait_for_start", timeout=timeout-(time.time()-s))
         for i, r in enumerate(responses):
             if r is None:
                 if self.child_processes[i]._process_instance.poll() is None:
