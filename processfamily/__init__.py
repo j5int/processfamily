@@ -528,7 +528,7 @@ class ProcessFamily(object):
                     **self.get_Popen_kwargs(i,
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else Popen.DEVNULL))
+                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL))
 
             if self.CPU_AFFINITY_STRATEGY:
                 self.set_child_affinity_mask(p.pid, i)

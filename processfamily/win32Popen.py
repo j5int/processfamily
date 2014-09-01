@@ -5,8 +5,8 @@ import subprocess
 import os
 import sys
 import msvcrt
-
-DEVNULL = -3
+import win32api
+import win32con
 
 class HandlesOverCommandLinePopen(subprocess.Popen):
     """
@@ -28,14 +28,12 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
         if not isinstance(bufsize, (int, long)):
             raise TypeError("bufsize must be an integer")
 
-        #must be all or nothing for now
-        for p in [stdin, stdout, stderr]:
-            if p not in [DEVNULL, subprocess.PIPE]:
-                raise ValueError("Only PIPE or DEVNULL is supported if pass_handles_over_commandline is True")
-
         self.commandline_passed = {}
         for s, p, m in [('stdin', stdin, 'w'), ('stdout', stdout, 'r'), ('stderr', stderr, 'r')]:
-            if p == subprocess.PIPE:
+            if p is None:
+                self.commandline_passed[s] = (None, 'null')
+
+            elif p == subprocess.PIPE:
 
                 if m == 'r':
                     mode = 'rU' if universal_newlines else 'rb'
@@ -47,8 +45,24 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
                 childhandle = str(int(msvcrt.get_osfhandle(pipewrite if m == 'r' else piperead)))
                 self.commandline_passed[s] = (myfile, childhandle, piperead, pipewrite)
             else:
-                childhandle = str(int(msvcrt.get_osfhandle(open(os.devnull, m))))
-                self.commandline_passed[s] = (None, childhandle)
+                if isinstance(p, int):
+                    childhandle = msvcrt.get_osfhandle(stdin)
+                else:
+                    # Assuming file-like object
+                    childhandle = msvcrt.get_osfhandle(p.fileno())
+
+                #The base implementation duplicates the handle, so we will too
+                #It doesn't need to be inheritable for us, though
+                cp = win32api.GetCurrentProcess()
+                childhandle = win32api.DuplicateHandle(
+                           cp,
+                           childhandle,
+                           cp,
+                           0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
+                           0, #Inheritable
+                           win32con.DUPLICATE_SAME_ACCESS)
+
+                self.commandline_passed[s] = (None, childhandle, p)
 
         args += [str(os.getpid()),
                  self.commandline_passed['stdin'][1],
