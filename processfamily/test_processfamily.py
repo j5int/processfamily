@@ -390,6 +390,7 @@ if sys.platform.startswith('win'):
     import win32service
     import win32serviceutil
     from processfamily.test.ExeBuilder import build_service_exe
+    from processfamily.processes import USE_PROCESS_QUERY_LIMITED_INFORMATION
 
     class PythonWTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
@@ -464,6 +465,13 @@ if sys.platform.startswith('win'):
                 cls.wait_for_service_to_stop(20)
             except Exception as e:
                 pass
+
+        if not USE_PROCESS_QUERY_LIMITED_INFORMATION:
+            def test_parent_kill(self):
+                self.skipTest("I cannot kill a network service service from here - I get an access denied error")
+
+            def test_parent_kill_child_locked_up(self):
+                self.skipTest("I cannot kill a network service service from here - I get an access denied error")
 
     class WindowsServiceNetworkServiceUserTests(WindowsServiceTests):
 
