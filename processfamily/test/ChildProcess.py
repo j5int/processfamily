@@ -32,6 +32,8 @@ if __name__ == '__main__':
 from processfamily import ChildProcess, start_child_process
 import logging
 from processfamily.test.FunkyWebServer import FunkyWebServer, hold_gil
+if sys.platform.startswith('win'):
+    from processfamily.win32Popen import open_commandline_passed_stdio_streams
 
 class ChildProcessForTests(ChildProcess):
 
@@ -56,5 +58,6 @@ class ChildProcessForTests(ChildProcess):
             self.server.stop()
 
 if __name__ == '__main__':
+    open_commandline_passed_stdio_streams()
     logging.basicConfig(level=logging.INFO)
     start_child_process(ChildProcessForTests())

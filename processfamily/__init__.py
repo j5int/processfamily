@@ -115,17 +115,7 @@ if sys.platform.startswith('win'):
                     return ""
                 self._read_buffer += data
 
-def open_parent_file_handle(parent_process_handle, parent_file_handle, mode='r'):
-    assert mode in ['r', 'w']
-    my_file_handle = win32api.DuplicateHandle(
-                           parent_process_handle,
-                           parent_file_handle,
-                           win32api.GetCurrentProcess(),
-                           0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
-                           0, #Inheritable
-                           win32con.DUPLICATE_SAME_ACCESS | win32con.DUPLICATE_CLOSE_SOURCE)
-    infd = msvcrt.open_osfhandle(int(my_file_handle), os.O_RDONLY if mode == 'r' else os.O_WRONLY)
-    return os.fdopen(infd, mode), my_file_handle
+
 
 class _BaseChildProcessHost(object):
     def __init__(self, child_process):
@@ -140,18 +130,10 @@ class _BaseChildProcessHost(object):
         self.dispatcher["stop"] = self._respond_immediately_for_stop
         self.dispatcher["wait_for_start"] = self._wait_for_start
 
-        if CAN_USE_EXTENDED_STARTUPINFO:
-            self.stdin = sys.stdin
-            self.stdout = sys.stdout
-        else:
-            assert len(sys.argv) > 5
-            sys.argv, ppid, pipe_handles = sys.argv[:-4], sys.argv[-4], sys.argv[-3:]
-            parent_process = win32api.OpenProcess(win32con.PROCESS_DUP_HANDLE, 0, int(ppid))
-            self.stdin, self._stdin_handle = open_parent_file_handle(parent_process, int(pipe_handles[0]), 'r')
-            self.stdout, self._stdout_handle = open_parent_file_handle(parent_process, int(pipe_handles[1]), 'w')
-            sys.stderr, self._stderr_handle = open_parent_file_handle(parent_process, int(pipe_handles[2]), 'w')
-
+        self.stdin = sys.stdin
         sys.stdin = open(os.devnull, 'r')
+
+        self.stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
 
         self._stdout_lock = threading.RLock()

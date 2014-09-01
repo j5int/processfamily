@@ -78,6 +78,50 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
         self.stdout = self.commandline_passed['stdout'][0]
         self.stderr = self.commandline_passed['stderr'][0]
 
+class _ParentPassedFile(object):
+
+    def __init__(self, f, win_file_handle):
+        self.f = f
+        self.win_file_handle = win_file_handle
+
+    def __getattr__(self, item):
+        if item == 'close':
+            return super(_ParentPassedFile, self).close
+        return getattr(self.f, item)
+
+    def close(self):
+        self.f.close()
+        self.win_file_handle.Close()
+
+def _open_parent_file_handle(parent_process_handle, parent_file_handle, mode='r'):
+    assert mode in ['r', 'w']
+    my_file_handle = win32api.DuplicateHandle(
+                           parent_process_handle,
+                           parent_file_handle,
+                           win32api.GetCurrentProcess(),
+                           0, #desiredAccess ignored because of DUPLICATE_SAME_ACCESS
+                           0, #Inheritable
+                           win32con.DUPLICATE_SAME_ACCESS | win32con.DUPLICATE_CLOSE_SOURCE)
+    infd = msvcrt.open_osfhandle(int(my_file_handle), os.O_RDONLY if mode == 'r' else os.O_WRONLY)
+    f = _ParentPassedFile(os.fdopen(infd, mode), my_file_handle)
+    return f
+
+def open_commandline_passed_stdio_streams(args=None):
+    a = args or sys.argv
+
+    assert len(a) > 5
+    a, ppid, pipe_handles = a[:-4], a[-4], a[-3:]
+    parent_process = win32api.OpenProcess(win32con.PROCESS_DUP_HANDLE, 0, int(ppid))
+    if pipe_handles[0] != 'null':
+        sys.stdin = _open_parent_file_handle(parent_process, int(pipe_handles[0]), 'r')
+    if pipe_handles[1] != 'null':
+        sys.stdout = _open_parent_file_handle(parent_process, int(pipe_handles[1]), 'w')
+    if pipe_handles[2] != 'null':
+        sys.stderr = _open_parent_file_handle(parent_process, int(pipe_handles[2]), 'w')
+
+    if args is None:
+        sys.argv = a
+
 
 class ProcThreadAttributeHandleListPopen(subprocess.Popen):
     """
