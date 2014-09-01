@@ -58,7 +58,7 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
 
         super(HandlesOverCommandLinePopen, self).__init__(args, bufsize=bufsize,
                  stdin=None, stdout=None, stderr=None,
-                 close_fds=close_fds, universal_newlines=universal_newlines)
+                 close_fds=close_fds, universal_newlines=universal_newlines, **kwargs)
 
         self.stdin = self.commandline_passed['stdin'][0]
         self.stdout = self.commandline_passed['stdout'][0]
