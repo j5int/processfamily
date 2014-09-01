@@ -8,6 +8,10 @@ import msvcrt
 import win32api
 import win32con
 import win32event
+import logging
+import time
+
+logger = logging.getLogger("processfamily.win32Popen")
 
 class HandlesOverCommandLinePopen(subprocess.Popen):
     """
@@ -19,13 +23,16 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
     This is achieved by passing the stream handles over the commandline
     and duplicating them manually in the child application.
 
+    wait_for_child_stream_duplication_event is the number of seconds to wait for the child
+    to duplicate the streams before returning from this method
+
     Relevant python docs:
     http://bugs.python.org/issue19764
     http://legacy.python.org/dev/peps/pep-0446/
     """
 
     def __init__(self, args,  bufsize=0, stdin=None, stdout=None, stderr=None,
-                 universal_newlines=False, close_fds=False, **kwargs):
+                 universal_newlines=False, close_fds=False, timeout_for_child_stream_duplication_event=30, **kwargs):
         if not isinstance(bufsize, (int, long)):
             raise TypeError("bufsize must be an integer")
 
@@ -67,7 +74,11 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
 
                 self.commandline_passed[s] = (None, str(int(childhandle)), childhandle, p)
 
-        self._wait_for_child_duplication_event = win32event.CreateEvent(None, 0, 0, None)
+        self._wait_for_child_duplication_event = win32event.CreateEvent(
+            None,
+            1,#bManualReset
+            0,
+            None)
 
         args += [str(os.getpid()),
                  str(int(self._wait_for_child_duplication_event)),
@@ -80,11 +91,23 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
                  stdin=None, stdout=None, stderr=None,
                  close_fds=close_fds, universal_newlines=universal_newlines, **kwargs)
 
-        r = win32event.WaitForSingleObject(self._wait_for_child_duplication_event, 5000)
+        if timeout_for_child_stream_duplication_event:
+            if not self.wait_for_child_stream_duplication_event(timeout_for_child_stream_duplication_event):
+                logger.warning("Timed out waiting for child process to duplicate its io streams")
 
         self.stdin = self.commandline_passed['stdin'][0]
         self.stdout = self.commandline_passed['stdout'][0]
         self.stderr = self.commandline_passed['stderr'][0]
+
+    def wait_for_child_stream_duplication_event(self, timeout):
+        s = time.time()
+        while time.time() - s < timeout:
+            r = win32event.WaitForSingleObject(self._wait_for_child_duplication_event, 333)
+            if r != win32event.WAIT_TIMEOUT:
+                return True
+            if self.poll() is not None:
+                return True
+        return False
 
     def poll(self, *args, **kwargs):
         return self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self).poll(*args, **kwargs))
