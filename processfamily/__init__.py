@@ -28,8 +28,8 @@ if sys.platform.startswith('win'):
     import win32file
     import msvcrt
 
-    from processfamily import _customWinPopen, _winprocess_ctypes
-    Popen = _customWinPopen.WinPopen
+    from processfamily import Popen, _winprocess_ctypes
+    Popen = Popen.WinPopen
     CAN_USE_EXTENDED_STARTUPINFO = _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO
 else:
     import prctl
@@ -527,7 +527,7 @@ class ProcessFamily(object):
                     **self.get_Popen_kwargs(i,
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else _customWinPopen.DEVNULL))
+                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else Popen.DEVNULL))
 
             if self.CPU_AFFINITY_STRATEGY:
                 self.set_child_affinity_mask(p.pid, i)
