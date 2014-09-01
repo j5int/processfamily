@@ -15,6 +15,9 @@ from processfamily import _traceback_str
 import signal
 import threading
 
+if sys.platform.startswith('win'):
+    from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO
+
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     skip_crash_test = None
@@ -265,10 +268,14 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.send_parent_http_command("stop")
 
     def test_handles_over_commandline_off(self):
+        if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
+            self.skipTest("This test is not supported on this platform")
         self.start_up(test_command='handles_over_commandline_off')
         self.send_parent_http_command("stop")
 
     def test_handles_over_commandline_off_close_fds_off(self):
+        if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
+            self.skipTest("This test is not supported on this platform")
         self.start_up(test_command='handles_over_commandline_off_close_fds_off')
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("FAIL", result, "Command to close file and delete it did not fail (got response: %s)" % result)
@@ -289,6 +296,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.send_parent_http_command("stop")
 
     def test_handles_over_commandline_off_file_open_by_parent(self):
+        if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
+            self.skipTest("This test is not supported on this platform")
         self.start_up(test_command='handles_over_commandline_off')
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("OK", result, "Command to close file and delete it failed (got response: %s)" % result)
