@@ -29,6 +29,7 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
             raise TypeError("bufsize must be an integer")
 
         self.commandline_passed = {}
+        self._cleanup_on_terminate = []
         for s, p, m in [('stdin', stdin, 'w'), ('stdout', stdout, 'r'), ('stderr', stderr, 'r')]:
             if p is None:
                 self.commandline_passed[s] = (None, 'null')
@@ -43,6 +44,7 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
                 piperead, pipewrite = os.pipe()
                 myfile = os.fdopen(pipewrite if m == 'w' else piperead, mode, bufsize)
                 childhandle = str(int(msvcrt.get_osfhandle(pipewrite if m == 'r' else piperead)))
+                self._cleanup_on_terminate.append(pipewrite if m == 'r' else piperead)
                 self.commandline_passed[s] = (myfile, childhandle, piperead, pipewrite)
             else:
                 if isinstance(p, int):
@@ -77,6 +79,18 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
         self.stdin = self.commandline_passed['stdin'][0]
         self.stdout = self.commandline_passed['stdout'][0]
         self.stderr = self.commandline_passed['stderr'][0]
+
+    def _internal_poll(self, *args, **kwargs):
+        r = super(HandlesOverCommandLinePopen, self)._internal_poll( *args, **kwargs)
+        if r is not None:
+            while self._cleanup_on_terminate:
+                c = self._cleanup_on_terminate.pop(-1)
+                try:
+                    os.close(c)
+                except:
+                    pass
+        return r
+
 
 class _ParentPassedFile(object):
 
