@@ -533,7 +533,7 @@ class ProcessFamily(object):
                 try:
                     self.set_child_affinity_mask(p.pid, i)
                 except Exception as e:
-                    logging.error("Unable to set affinity for process %d: %s", p.pid, e)
+                    logger.error("Unable to set affinity for process %d: %s", p.pid, e)
             self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
 
         if sys.platform.startswith('win') and self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
