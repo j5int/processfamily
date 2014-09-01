@@ -509,13 +509,12 @@ class ProcessFamily(object):
             logger.info("Starting %s", self.get_child_name(i))
             cmd = self.get_child_process_cmd(i)
             logger.debug("Commandline for %s: %s", self.get_child_name(i), json.dumps(cmd))
-            FNULL = open(os.devnull, 'w')
             p = self.get_Popen_class()(
                     cmd,
                     **self.get_Popen_kwargs(i,
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL,
+                        stdin=subprocess.PIPE if self.CHILD_COMMS_STRATEGY else None,
+                        stdout=subprocess.PIPE if self.CHILD_COMMS_STRATEGY else None,
+                        stderr=(subprocess.PIPE if self.ECHO_STD_ERR else open(os.devnull, 'w')) if self.CHILD_COMMS_STRATEGY else None,
                         close_fds=self.CLOSE_FDS))
 
             if self.CPU_AFFINITY_STRATEGY and p.poll() is None:
