@@ -85,13 +85,7 @@ class _ParentPassedFile(object):
         self.win_file_handle = win_file_handle
 
     def __getattr__(self, item):
-        if item == 'close':
-            return super(_ParentPassedFile, self).close
         return getattr(self.f, item)
-
-    def close(self):
-        self.f.close()
-        self.win_file_handle.Close()
 
 def _open_parent_file_handle(parent_process_handle, parent_file_handle, mode='r'):
     assert mode in ['r', 'w']
