@@ -268,15 +268,17 @@ class ChildProcessProxy(object):
         self.child_index = child_index
         self.name = self.process_family.get_child_name(child_index)
         self._process_instance = process_instance
+
+        self._rsp_queues_lock = threading.RLock()
+        self._rsp_queues = {}
+        self._stdin_lock = threading.RLock()
+
         self.echo_std_err = echo_std_err
         if self.echo_std_err:
             self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target)
             self._sys_err_thread.start()
         self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
         self._sys_out_thread.start()
-        self._rsp_queues_lock = threading.RLock()
-        self._rsp_queues = {}
-        self._stdin_lock = threading.RLock()
 
     def send_command(self, command, timeout, params=None):
         response_id = str(uuid.uuid4())
@@ -512,8 +514,11 @@ class ProcessFamily(object):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL))
 
-            if self.CPU_AFFINITY_STRATEGY:
-                self.set_child_affinity_mask(p.pid, i)
+            if self.CPU_AFFINITY_STRATEGY and p.poll() is None:
+                try:
+                    self.set_child_affinity_mask(p.pid, i)
+                except Exception as e:
+                    logging.error("Unable to set affinity for process %d: %s", p.pid, e)
             self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
 
         logger.debug("Waiting for child start events")
