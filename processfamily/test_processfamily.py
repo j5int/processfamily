@@ -11,6 +11,7 @@ import socket
 import logging
 import glob
 from processfamily.processes import process_exists, kill_process, AccessDeniedError
+from processfamily import _traceback_str
 import signal
 import threading
 
