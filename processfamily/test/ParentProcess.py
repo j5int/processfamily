@@ -29,6 +29,9 @@ import logging
 from processfamily.threads import stop_threads
 import threading
 
+if sys.platform.startswith('win'):
+    from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO
+
 class ProcessFamilyForTests(ProcessFamily):
     WIN_PASS_HANDLES_OVER_COMMANDLINE = True
 
@@ -59,6 +62,8 @@ class ProcessFamilyForTests(ProcessFamily):
                 self.WIN_PASS_HANDLES_OVER_COMMANDLINE = False
                 self.CHILD_COMMS_STRATEGY = CHILD_COMMS_STRATEGY_PIPES_CLOSE if command == 'use_cat' else CHILD_COMMS_STRATEGY_NONE
                 if sys.platform.startswith('win'):
+                    if not CAN_USE_EXTENDED_STARTUPINFO and command == 'use_cat':
+                        self.CLOSE_FDS = False
                     self.override_command_line = [os.path.join(os.path.dirname(__file__), 'win32', 'cat.exe')]
                 else:
                     self.override_command_line = ['cat']
