@@ -477,7 +477,10 @@ if sys.platform.startswith('win'):
 
         @staticmethod
         def grant_network_service_rights(folder, rights):
-            subprocess.check_call(["cmd.exe", "/C", "icacls", folder, "/grant", "NETWORK SERVICE:(OI)(CI)%s" % rights])
+            try:
+                subprocess.check_call(["cmd.exe", "/C", "icacls", folder, "/grant", "NETWORK SERVICE:(OI)(CI)%s" % rights])
+            except Exception as e:
+                logging.warning("icacls command returned a non-zero response for folder/file '%s'")
 
         @classmethod
         def setUpClass(cls):
