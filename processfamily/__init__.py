@@ -405,7 +405,7 @@ class ProcessFamily(object):
     ECHO_STD_ERR = False
     CPU_AFFINITY_STRATEGY = CPU_AFFINITY_STRATEGY_PARENT_INCLUDED
     CLOSE_FDS = True
-    WIN_PASS_HANDLES_OVER_COMMANDLINE = True
+    WIN_PASS_HANDLES_OVER_COMMANDLINE = False
     WIN_USE_JOB_OBJECT = True
     LINUX_USE_PDEATHSIG = True
     NEW_PROCESS_GROUP = True
@@ -468,6 +468,8 @@ class ProcessFamily(object):
         if sys.platform.startswith('win'):
             if self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
                 kwargs['timeout_for_child_stream_duplication_event'] = None
+                if self.NEW_PROCESS_GROUP:
+                    kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
             return kwargs
         else:
             kwargs['preexec_fn'] = functools.partial(self.pre_exec_fn, i)
@@ -476,8 +478,10 @@ class ProcessFamily(object):
     def get_Popen_class(self):
         if sys.platform.startswith('win'):
             if self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
+                logger.debug("Using HandlesOverCommandLinePopen")
                 return win32Popen.HandlesOverCommandLinePopen
             else:
+                logger.debug("Using ProcThreadAttributeHandleListPopen")
                 return win32Popen.ProcThreadAttributeHandleListPopen
         else:
             return subprocess.Popen
