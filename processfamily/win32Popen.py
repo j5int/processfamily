@@ -81,13 +81,13 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
         self.stderr = self.commandline_passed['stderr'][0]
 
     def poll(self, *args, **kwargs):
-        self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self).poll(*args, **kwargs))
+        return self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self).poll(*args, **kwargs))
 
     def wait(self, *args, **kwargs):
-        self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self).wait(*args, **kwargs))
+        return self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self).wait(*args, **kwargs))
 
     def _internal_poll(self, *args, **kwargs):
-        self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self)._internal_poll( *args, **kwargs))
+        return self._cleanup_on_returncode(super(HandlesOverCommandLinePopen, self)._internal_poll(*args, **kwargs))
 
     def _cleanup_on_returncode(self, r):
         if r is not None:
