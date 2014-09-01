@@ -48,6 +48,12 @@ class WinPopen(subprocess.Popen):
                     childhandle = str(int(msvcrt.get_osfhandle(open(os.devnull, m))))
                     self.commandline_passed[s] = (None, childhandle)
 
+            args += [str(os.getpid()),
+                     self.commandline_passed['stdin'][1],
+                     self.commandline_passed['stdout'][1],
+                     self.commandline_passed['stderr'][1],
+                     ]
+
             stdin, stdout, stderr = None, None, None
 
         super(WinPopen, self).__init__(args, bufsize=bufsize, executable=executable,
@@ -109,13 +115,6 @@ class WinPopen(subprocess.Popen):
             startupinfo.hStdInput = int(p2cread)
             startupinfo.hStdOutput = int(c2pwrite)
             startupinfo.hStdError = int(errwrite)
-
-        if self.pass_handles_over_commandline:
-            args += [str(os.getpid()),
-                     self.commandline_passed['stdin'][1],
-                     self.commandline_passed['stdout'][1],
-                     self.commandline_passed['stderr'][1],
-                     ]
 
         if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
             attribute_list = _winprocess_ctypes.ProcThreadAttributeList(attribute_list_data)
