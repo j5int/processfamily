@@ -24,7 +24,6 @@ if sys.platform.startswith('win'):
     import win32job
     import win32api
     import win32security
-    import win32file
 
     from processfamily import win32Popen
 else:
@@ -33,7 +32,7 @@ else:
 logger = logging.getLogger("processfamily")
 
 def start_child_process(child_process_instance):
-    host = _BaseChildProcessHost(child_process_instance)
+    host = _ChildProcessHost(child_process_instance)
     host.run()
 
 def _traceback_str():
@@ -83,7 +82,7 @@ class _ArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         raise ValueError(message)
 
-class _BaseChildProcessHost(object):
+class _ChildProcessHost(object):
     def __init__(self, child_process):
         self.child_process = child_process
         self.command_arg_parser = _ArgumentParser(description='Execute an RPC method on the child')
@@ -137,8 +136,6 @@ class _BaseChildProcessHost(object):
             try:
                 line = self.stdin.readline()
                 if not line:
-                    #TODO: in the code review - Please consider whether this is correct
-                    #i.e. should we shut everything down when this happens?
                     should_continue = False
                 else:
                     try:
@@ -224,7 +221,7 @@ class _BaseChildProcessHost(object):
             self._send_response('{"jsonrpc": "2.0", "error": {"code": 32603, "message": "Error handling request"}, "id": %s}'%request_id)
 
 
-class ChildProcessProxy(object):
+class _ChildProcessProxy(object):
     """
     A proxy to the child process that can be used from the parent process
     """
@@ -522,7 +519,7 @@ class ProcessFamily(object):
                     self.set_child_affinity_mask(p.pid, i)
                 except Exception as e:
                     logger.error("Unable to set affinity for process %d: %s", p.pid, e)
-            self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
+            self.child_processes.append(_ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
 
         if sys.platform.startswith('win') and self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
             logger.debug("Waiting for child stream duplication events")
