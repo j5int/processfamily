@@ -9,7 +9,19 @@ import msvcrt
 DEVNULL = -3
 
 class HandlesOverCommandLinePopen(subprocess.Popen):
+    """
+    This class can be used to more closely match the behaviour
+    on linux when the input and output streams are redirected, but you
+    want close_fds to be True. (This is 'not supported' in the standard
+    implementation.)
 
+    This is achieved by passing the stream handles over the commandline
+    and duplicating them manually in the child application.
+
+    Relevant python docs:
+    http://bugs.python.org/issue19764
+    http://legacy.python.org/dev/peps/pep-0446/
+    """
 
     def __init__(self, args,  bufsize=0, stdin=None, stdout=None, stderr=None,
                  universal_newlines=False, close_fds=False, **kwargs):
@@ -59,7 +71,7 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
     handles to inherit. This is used to more closely match the behaviour
     on linux when the input and output streams are redirected, but you
     want close_fds to be True. (This is 'not supported' in the standard
-    implementation.
+    implementation.)
 
     Please note that this functionality requires Windows version > XP/2003.
 
