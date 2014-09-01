@@ -410,7 +410,7 @@ class ProcessFamily(object):
     Manages the launching of a set of child processes
     """
 
-    ECHO_STD_ERR = True
+    ECHO_STD_ERR = False
     CPU_AFFINITY_STRATEGY = CPU_AFFINITY_STRATEGY_PARENT_INCLUDED
 
     def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=True):

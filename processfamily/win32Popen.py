@@ -64,7 +64,7 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
                            0, #Inheritable
                            win32con.DUPLICATE_SAME_ACCESS)
 
-                self.commandline_passed[s] = (None, childhandle, p)
+                self.commandline_passed[s] = (None, str(int(childhandle)), childhandle, p)
 
         args += [str(os.getpid()),
                  self.commandline_passed['stdin'][1],
