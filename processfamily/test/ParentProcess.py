@@ -30,6 +30,8 @@ from processfamily.threads import stop_threads
 import threading
 
 class ProcessFamilyForTests(ProcessFamily):
+    WIN_PASS_HANDLES_OVER_COMMANDLINE = True
+
     def __init__(self, number_of_child_processes=None, run_as_script=True):
         super(ProcessFamilyForTests, self).__init__(
             child_process_module_name='processfamily.test.ChildProcess',
@@ -41,6 +43,12 @@ class ProcessFamilyForTests(ProcessFamily):
                 command = f.read()
             if command == 'echo_std_err':
                 self.ECHO_STD_ERR = True
+            elif command == 'handles_over_commandline_off':
+                self.WIN_PASS_HANDLES_OVER_COMMANDLINE = False
+            elif command == 'use_job_object_off':
+                self.WIN_USE_JOB_OBJECT = False
+            elif command == 'cpu_affinity_off':
+                self.CPU_AFFINITY_STRATEGY = None
 
     def handle_sys_err_line(self, child_index, line):
         logging.info("SYSERR: %d: %s", child_index+1, line.strip())

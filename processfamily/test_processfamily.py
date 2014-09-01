@@ -263,6 +263,24 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up(test_command='echo_std_err')
         self.send_parent_http_command("stop")
 
+    def test_handles_over_commandline_off(self):
+        self.start_up(test_command='handles_over_commandline_off')
+        self.send_parent_http_command("stop")
+
+    def test_use_job_object_off(self):
+        self.start_up(test_command='use_job_object_off')
+        self.send_parent_http_command("stop")
+
+    def test_cpu_affinity_off(self):
+        self.start_up(test_command='cpu_affinity_off')
+        self.send_parent_http_command("stop")
+
+    def test_handles_over_commandline_off_file_open_by_parent(self):
+        self.start_up(test_command='handles_over_commandline_off')
+        result = self.send_parent_http_command("close_file_and_delete_it")
+        self.assertEqual("OK", result, "Command to close file and delete it failed (got response: %s)" % result)
+        self.send_parent_http_command("stop")
+
     def freeze_up_middle_child(self):
         #First check that we can do this fast (i.e. things aren't stuttering because of environment):
         for i in range(5):
