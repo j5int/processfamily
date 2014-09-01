@@ -23,19 +23,12 @@ import functools
 if sys.platform.startswith('win'):
     import win32job
     import win32api
-    import win32con
     import win32security
     import win32file
-    import msvcrt
 
     from processfamily import win32Popen
-    from processfamily import _winprocess_ctypes
-
-    Popen = win32Popen.HandlesOverCommandLinePopen
-    CAN_USE_EXTENDED_STARTUPINFO = _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO
 else:
     import prctl
-    Popen = subprocess.Popen
 
 logger = logging.getLogger("processfamily")
 
@@ -414,6 +407,11 @@ class ProcessFamily(object):
 
     ECHO_STD_ERR = False
     CPU_AFFINITY_STRATEGY = CPU_AFFINITY_STRATEGY_PARENT_INCLUDED
+    CLOSE_FDS = True
+    WIN_PASS_HANDLES_OVER_COMMANDLINE = True
+    WIN_USE_JOB_OBJECT = True
+    LINUX_USE_PDEATHSIG = True
+    NEW_PROCESS_GROUP = True
 
     def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=True):
         self.child_process_module_name = child_process_module_name
@@ -468,22 +466,32 @@ class ProcessFamily(object):
 
     def get_Popen_kwargs(self, i, **kwargs):
         if sys.platform.startswith('win'):
-            kwargs['close_fds'] = True
-            kwargs['timeout_for_child_stream_duplication_event'] = None
+            if self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
+                kwargs['timeout_for_child_stream_duplication_event'] = None
             return kwargs
         else:
-
-            kwargs['close_fds'] = True
             kwargs['preexec_fn'] = functools.partial(self.pre_exec_fn, i)
             return kwargs
 
+    def get_Popen_class(self):
+        if sys.platform.startswith('win'):
+            if self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
+                return win32Popen.HandlesOverCommandLinePopen
+            else:
+                return win32Popen.ProcThreadAttributeHandleListPopen
+        else:
+            return subprocess.Popen
 
     def pre_exec_fn(self, i):
         #This is called after fork(), but before exec()
         #Assign this new process to a new group
-        os.setpgrp()
-        prctl.set_pdeathsig(signal.SIGKILL)
+        if self.NEW_PROCESS_GROUP:
+            os.setpgrp()
+        if self.LINUX_USE_PDEATHSIG:
+            prctl.set_pdeathsig(self.get_pdeath_sig())
 
+    def get_pdeath_sig(self):
+        return signal.SIGKILL
 
     def set_parent_affinity_mask(self):
         if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
@@ -500,7 +508,7 @@ class ProcessFamily(object):
         if self.CPU_AFFINITY_STRATEGY:
             self.set_parent_affinity_mask()
 
-        if sys.platform.startswith('win'):
+        if sys.platform.startswith('win') and self.WIN_USE_JOB_OBJECT:
             self._add_to_job_object()
 
         self.child_processes = []
@@ -509,12 +517,13 @@ class ProcessFamily(object):
             cmd = self.get_child_process_cmd(i)
             logger.debug("Commandline for %s: %s", self.get_child_name(i), json.dumps(cmd))
             FNULL = open(os.devnull, 'w')
-            p = Popen(
+            p = self.get_Popen_class()(
                     cmd,
                     **self.get_Popen_kwargs(i,
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL))
+                        stderr=subprocess.PIPE if self.ECHO_STD_ERR else FNULL,
+                        close_fds=self.CLOSE_FDS))
 
             if self.CPU_AFFINITY_STRATEGY and p.poll() is None:
                 try:
@@ -523,11 +532,10 @@ class ProcessFamily(object):
                     logging.error("Unable to set affinity for process %d: %s", p.pid, e)
             self.child_processes.append(ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
 
-        if sys.platform.startswith('win'):
+        if sys.platform.startswith('win') and self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
             logger.debug("Waiting for child stream duplication events")
             for c in self.child_processes:
                 c._process_instance.wait_for_child_stream_duplication_event(timeout=timeout-(time.time()-s)-3)
-
 
         logger.debug("Waiting for child start events")
         responses = self.send_command_to_all("wait_for_start", timeout=timeout-(time.time()-s))

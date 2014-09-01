@@ -58,6 +58,7 @@ class ChildProcessForTests(ChildProcess):
             self.server.stop()
 
 if __name__ == '__main__':
-    open_commandline_passed_stdio_streams()
+    if len(sys.argv) > 5:
+        open_commandline_passed_stdio_streams()
     logging.basicConfig(level=logging.INFO)
     start_child_process(ChildProcessForTests())
