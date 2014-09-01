@@ -23,7 +23,7 @@ if __name__ == '__main__':
     with open(pid_filename, "w") as pid_f:
         pid_f.write("%s\n" % pid)
 
-from processfamily import ProcessFamily, _traceback_str
+from processfamily import ProcessFamily, _traceback_str, CHILD_COMMS_STRATEGY_STDIN_CLOSE, CHILD_COMMS_STRATEGY_NONE
 from processfamily.test.FunkyWebServer import FunkyWebServer
 import logging
 from processfamily.threads import stop_threads
@@ -37,6 +37,7 @@ class ProcessFamilyForTests(ProcessFamily):
             child_process_module_name='processfamily.test.ChildProcess',
             number_of_child_processes=number_of_child_processes,
             run_as_script=run_as_script)
+        self.override_command_line = None
         command_file = os.path.join(os.path.dirname(__file__), 'tmp', 'command.txt')
         if os.path.exists(command_file):
             with open(command_file, "r") as f:
@@ -54,11 +55,20 @@ class ProcessFamilyForTests(ProcessFamily):
                 self.WIN_USE_JOB_OBJECT = False
             elif command == 'cpu_affinity_off':
                 self.CPU_AFFINITY_STRATEGY = None
+            elif command == 'use_cat' or command == 'use_cat_comms_none':
+                self.WIN_PASS_HANDLES_OVER_COMMANDLINE = False
+                self.CHILD_COMMS_STRATEGY = CHILD_COMMS_STRATEGY_STDIN_CLOSE if command == 'use_cat' else CHILD_COMMS_STRATEGY_NONE
+                if sys.platform.startswith('win'):
+                    self.override_command_line = [os.path.join(os.path.dirname(__file__), 'win32', 'cat.exe')]
+                else:
+                    self.override_command_line = ['cat']
 
     def handle_sys_err_line(self, child_index, line):
         logging.info("SYSERR: %d: %s", child_index+1, line.strip())
 
     def get_child_process_cmd(self, child_number):
+        if self.override_command_line:
+            return self.override_command_line
         return super(ProcessFamilyForTests, self).get_child_process_cmd(child_number) + [
             '--process_number', str(child_number+1)]
 

@@ -93,7 +93,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.assertFalse(processes_left_running, msg="There should have been no PIDs left running but there were: %s" % (', '.join([str(p) for p in processes_left_running])))
 
 
-    def start_up(self, test_command=None, wait_for_middle_child=True):
+    def start_up(self, test_command=None, wait_for_middle_child=True, wait_for_children=True):
         command_file = os.path.join(os.path.dirname(__file__), 'test', 'tmp', 'command.txt')
         if test_command:
             with open(command_file, "w") as f:
@@ -108,6 +108,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         while still_waiting and time.time() - start_time < 15:
             still_waiting = False
             for i in range(4):
+                if i > 0 and not wait_for_children:
+                    continue
                 if i == 2 and not wait_for_middle_child:
                     continue
                 try:
@@ -290,6 +292,14 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         else:
             #TODO: a relevant test on linux?
             pass
+        self.send_parent_http_command("stop")
+
+    def test_child_comms_strategy_stdin_close(self):
+        self.start_up(test_command='use_cat', wait_for_children=False)
+        self.send_parent_http_command("stop")
+
+    def test_child_comms_strategy_none(self):
+        self.start_up(test_command='use_cat_comms_none', wait_for_children=False)
         self.send_parent_http_command("stop")
 
     def test_use_job_object_off(self):
