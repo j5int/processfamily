@@ -611,15 +611,8 @@ class ProcessFamily(object):
 
     def _find_module_filename(self, modulename):
         """finds the filename of the module with the given name (supports submodules)"""
-        module_parts = modulename.split(".")
-        search_path = None
-        for i, part in enumerate(module_parts):
-            search_module = ".".join(module_parts[:i+1])
-            try:
-                loader = pkgutil.find_loader(search_module)
-                if loader is None:
-                    raise ImportError(search_module)
-                search_path = loader.get_filename(search_module)
-            except ImportError:
-                raise ValueError("Could not find %s (reached %s at %s)" % (modulename, part, search_path))
+        loader = pkgutil.find_loader(modulename)
+        if loader is None:
+            raise ImportError(modulename)
+        search_path = loader.get_filename(modulename)
         return search_path
