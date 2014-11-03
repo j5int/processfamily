@@ -171,7 +171,8 @@ class _ChildProcessHost(object):
 
     def _send_response(self, rsp):
         if rsp:
-            assert not '\n' in rsp
+            if '\n' in rsp:
+                raise ValueError('Invalid response string (new lines are not allowed): "%r"' % rsp)
             with self._stdout_lock:
                 logger.debug("Sending response: %s", rsp)
                 self.stdout.write("%s\n"%rsp)
@@ -208,7 +209,7 @@ class _ChildProcessHost(object):
             return False
         else:
             #Others should be processed from a new thread:
-            threading.Thread(target=self._dispatch_rpc_call, args=(line, request_id)).start()
+            threading.Thread(target=self._dispatch_rpc_call_thread_target, args=(line, request_id)).start()
             return True
 
     def _dispatch_rpc_call(self, line, request_id):
@@ -219,6 +220,12 @@ class _ChildProcessHost(object):
         except Exception as e:
             logger.error("Error handling command string: %s\n%s", e, _traceback_str())
             self._send_response('{"jsonrpc": "2.0", "error": {"code": 32603, "message": "Error handling request"}, "id": %s}'%request_id)
+
+    def _dispatch_rpc_call_thread_target(self, line, request_id):
+        try:
+            self._dispatch_rpc_call(line, request_id)
+        except Exception as e:
+            logger.error("Error handling command string: %s\n%s", e, _traceback_str())
 
 
 class _ChildProcessProxy(object):
@@ -267,7 +274,9 @@ class _ChildProcessProxy(object):
             cmd["params"] = params
 
         req = json.dumps(cmd)
-        assert not '\n' in req
+        if '\n' in req:
+            raise ValueError('Invalid request string (new lines are not allowed): "%r"' % req)
+
         try:
             with self._stdin_lock:
                 self._process_instance.stdin.write("%s\n" % req)
@@ -492,7 +501,8 @@ class ProcessFamily(object):
         set_processor_affinity([i%self.cpu_count], pid=pid)
 
     def start(self, timeout=30):
-        assert not self.child_processes
+        if self.child_processes:
+            raise Exception("Invalid state: start() can only be called once")
         s = time.time()
 
         if self.CPU_AFFINITY_STRATEGY:
