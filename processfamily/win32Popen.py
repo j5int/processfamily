@@ -143,7 +143,8 @@ class _ParentPassedFile(object):
         return getattr(self.f, item)
 
 def _open_parent_file_handle(parent_process_handle, parent_file_handle, mode='r'):
-    assert mode in ['r', 'w']
+    if mode not in ['r', 'w']:
+        raise ValueError("mode must be 'r' or 'w'")
     my_file_handle = win32api.DuplicateHandle(
                            parent_process_handle,
                            parent_file_handle,
@@ -158,7 +159,9 @@ def _open_parent_file_handle(parent_process_handle, parent_file_handle, mode='r'
 def open_commandline_passed_stdio_streams(args=None):
     a = args or sys.argv
 
-    assert len(a) > 5
+    if len(a) < 6:
+        raise ValueError("Expected at least 6 arguments")
+
     a, ppid, event_handle_s, pipe_handles = a[:-5], a[-5], a[-4], a[-3:]
     parent_process = win32api.OpenProcess(win32con.PROCESS_DUP_HANDLE, 0, int(ppid))
     event_handle = win32api.DuplicateHandle(
