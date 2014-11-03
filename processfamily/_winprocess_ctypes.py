@@ -67,16 +67,18 @@ __author__ = 'Administrator'
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from ctypes import c_void_p, POINTER, sizeof, Structure, Union, windll, WinError
-from ctypes import cast, pointer, WINFUNCTYPE, c_ulong, c_size_t, c_ssize_t, byref
+from ctypes import c_void_p, POINTER, sizeof, Structure, Union, windll, WinError, WINFUNCTYPE, c_ulong
+from ctypes import cast, pointer, c_size_t, c_ssize_t, byref
 from ctypes.wintypes import BOOL, BYTE, DWORD, HANDLE, LPCWSTR, LPWSTR, UINT, WORD, ULONG
 import sys
 
-PVOID = LPVOID = c_void_p
+LPVOID = c_void_p
 LPBYTE = POINTER(BYTE)
-DWORD_PTR = LPDWORD = POINTER(DWORD)
+LPDWORD = POINTER(DWORD)
 LPBOOL = POINTER(BOOL)
 LPULONG = POINTER(c_ulong)
+PVOID = LPVOID
+DWORD_PTR = LPDWORD
 # Map size_t to SIZE_T
 SIZE_T  = c_size_t
 SSIZE_T = c_ssize_t
