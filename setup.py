@@ -27,6 +27,6 @@ setup(
     ],
     install_requires = ["json-rpc", "affinity"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else ['python-prctl']),
     extras_require = {
-        'tests': ['nose', 'requests'] + (['py2exe'] if sys.platform.startswith("win") else []),
+        'tests': ['nose', 'requests'] + (['py-exe-builder'] if sys.platform.startswith("win") else []),
     }
 )
