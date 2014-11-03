@@ -292,7 +292,7 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
 
         # create the process
         try:
-            hp, ht, pid, tid = _winprocess_ctypes.CreateProcess(
+            hp, ht, pid, tid = _winprocess_ctypes.ExtendedCreateProcess(
                 executable, args,
                 None, None, # No special security
                 inherit_handles, #Inherit handles
