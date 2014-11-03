@@ -14,7 +14,7 @@ setup(
     long_description=open('README.md').read(),
     url='http://www.j5int.com/',
     author='j5 International',
-    author_email='support@sjsoft.com',
+    author_email='support@j5int.com',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: Apache Software License',
