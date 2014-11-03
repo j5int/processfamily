@@ -16,7 +16,7 @@ import signal
 import threading
 
 if sys.platform.startswith('win'):
-    from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO
+    from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO, CREATE_BREAKAWAY_FROM_JOB
 
 class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
@@ -383,9 +383,12 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
     skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
     def start_parent_process(self):
+        kwargs={}
+        if sys.platform.startswith('win'):
+            kwargs['creationflags'] = CREATE_BREAKAWAY_FROM_JOB
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
-            close_fds=True)
+            close_fds=True, **kwargs)
         threading.Thread(target=self.parent_process.communicate).start()
 
     def wait_for_parent_to_stop(self, timeout):
@@ -402,9 +405,11 @@ if sys.platform.startswith('win'):
         skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
         def start_parent_process(self):
+
             self.parent_process = subprocess.Popen(
                 [Config.pythonw_exe, self.get_path_to_ParentProcessPy()],
-                close_fds=True)
+                close_fds=True,
+                creationflags=CREATE_BREAKAWAY_FROM_JOB)
             threading.Thread(target=self.parent_process.communicate).start()
 
         def wait_for_parent_to_stop(self, timeout):
