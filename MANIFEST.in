@@ -1,2 +1,4 @@
 include LICENSE
 include README.md
+include processfamily/test/win32/cat.exe
+include processfamily/test/win32/README.txt
