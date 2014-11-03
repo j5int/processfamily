@@ -360,7 +360,12 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def send_http_command(self, port, command, **kwargs):
         r = requests.get('http://localhost:%d/%s' % (port, command), **kwargs)
-        return r.json()
+        j = r.json
+        if callable(j):
+            return j()
+        else:
+            #This is the old requests api:
+            return j
 
     def wait_for_process_to_stop(self, process, timeout):
         if process is None:
