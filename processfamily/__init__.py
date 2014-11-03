@@ -146,7 +146,7 @@ class _ChildProcessHost(object):
                 logger.error("Exception reading input for processfamily: %s\n%s", e,  _traceback_str())
                 # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                 # so it might get in to a tight loop which I want to avoid
-                time.sleep(1)
+                time.sleep(5)
 
         self._should_stop = True
         self._started_event.wait(1)
@@ -344,7 +344,7 @@ class _ChildProcessProxy(object):
                     logger.error("Exception reading stdout output for %s: %s\n%s", self.name, e,  _traceback_str())
                     # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
                     # so it might get in to a tight loop which I want to avoid
-                    time.sleep(1)
+                    time.sleep(5)
             logger.debug("Subprocess stdout closed - expecting termination")
             start_time = time.time()
             while self._process_instance.poll() is None and time.time() - start_time < 5:
