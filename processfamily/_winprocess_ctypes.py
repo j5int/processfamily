@@ -1,5 +1,8 @@
 # Extends mozprocess with some code from winappdgb:
-# Some parts are also from: http://winappdbg.sourceforge.net/
+# These parts are mostly from: http://winappdbg.sourceforge.net/
+#
+# We've decided not actually add a dependency on that library, though, as it is
+# not too straightforward to install, and is quite a a beast.
 #
 # Copyright (c) 2009-2014, Mario Vilas
 # All rights reserved.
