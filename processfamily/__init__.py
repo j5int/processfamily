@@ -416,6 +416,9 @@ class ProcessFamily(object):
         self._child_process_group_id = None
 
     def get_child_process_cmd(self, child_number):
+        """
+        :param child_number zero-indexed
+        """
         if self.run_as_script:
             return [self.get_sys_executable(), self._find_module_filename(self.child_process_module_name)]
         else:
