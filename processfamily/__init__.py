@@ -416,6 +416,9 @@ class ProcessFamily(object):
         self._child_process_group_id = None
 
     def get_child_process_cmd(self, child_number):
+        """
+        :param child_number zero-indexed
+        """
         if self.run_as_script:
             return [self.get_sys_executable(), self._find_module_filename(self.child_process_module_name)]
         else:
@@ -553,9 +556,8 @@ class ProcessFamily(object):
                             self.child_processes[i]._process_instance.poll())
         logger.info("All child processes initialised")
 
-    def stop(self, timeout=30):
+    def stop(self, timeout=30, wait=True):
         clean_timeout = timeout - 1
-        start_time = time.time()
         if self.CHILD_COMMS_STRATEGY:
             if self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
                 logger.info("Sending stop commands to child processes")
@@ -567,7 +569,13 @@ class ProcessFamily(object):
                         p._process_instance.stdin.close()
                     except Exception as e:
                         logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
+        if wait:
+            self.wait_for_stop_and_then_terminate()
 
+    def wait_for_stop_and_then_terminate(self, timeout=30):
+        clean_timeout = timeout - 1
+        start_time = time.time()
+        if self.CHILD_COMMS_STRATEGY:
             logger.debug("Waiting for child processes to terminate")
             self._wait_for_children_to_terminate(start_time, clean_timeout)
 
