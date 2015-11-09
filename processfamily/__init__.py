@@ -102,8 +102,8 @@ class _ChildProcessHost(object):
         sys.stdout = open(os.devnull, 'w')
 
         self._stdout_lock = threading.RLock()
-        self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
-        self._sys_in_thread.setDaemon(True)
+        self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target, name="pf_%s_stdin" % child_process.name)
+        self._sys_in_thread.daemon = True
         self._should_stop = False
 
     def run(self):
@@ -150,7 +150,9 @@ class _ChildProcessHost(object):
 
         self._should_stop = True
         self._started_event.wait(1)
-        threading.Thread(target=self._stop_thread_target).start()
+        stop_thread = threading.Thread(target=self._stop_thread_target, name="pf_%s_stop" % self.child_process.name)
+        stop_thread.daemon = True
+        stop_thread.start()
         self._stopped_event.wait(3)
         #Give her ten seconds to stop
         #This will not actually stop the process from terminating as this is a daemon thread
@@ -246,10 +248,12 @@ class _ChildProcessProxy(object):
 
         self.echo_std_err = echo_std_err
         if self.echo_std_err:
-            self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target)
+            self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target, name="pf_%s_stderr" % self.name)
+            self._sys_err_thread.daemon = True
             self._sys_err_thread.start()
         if self.comms_strategy:
-            self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
+            self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target, name="pf_%s_stdout" % self.name)
+            self._sys_out_thread.daemon = True
             self._sys_out_thread.start()
 
     def send_command(self, command, timeout, params=None):
