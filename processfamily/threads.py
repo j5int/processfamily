@@ -128,8 +128,11 @@ def log_thread_tracebacks(threads, stop_event=None, finished_event=None, logleve
     logger.log(loglevel, "Preparing to shut down %d threads; generating tracebacks", len(threads))
     for (thread, frame) in find_thread_frames():
         if thread in threads:
-            logger.log(loglevel, "Preparing to shut down thread %r", thread)
-            logger.log(loglevel, "".join(traceback.format_stack(frame)))
+            if thread.daemon:
+                logger.log(loglevel, "Preparing to shut down daemon thread %r", thread)
+            else:
+                logger.log(loglevel, "Preparing to shut down thread %r", thread)
+                logger.log(loglevel, "".join(traceback.format_stack(frame)))
             if stop_event and stop_event.is_set():
                 logger.log(loglevel, "Told to stop tracebacks; aborting")
                 break
