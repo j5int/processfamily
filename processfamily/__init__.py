@@ -102,7 +102,7 @@ class _ChildProcessHost(object):
         sys.stdout = open(os.devnull, 'w')
 
         self._stdout_lock = threading.RLock()
-        self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target, name="pf_%s_stdin" % child_process.name)
+        self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target, name="pf_%s_stdin" % repr(child_process))
         self._sys_in_thread.daemon = True
         self._should_stop = False
 
@@ -150,7 +150,7 @@ class _ChildProcessHost(object):
 
         self._should_stop = True
         self._started_event.wait(1)
-        stop_thread = threading.Thread(target=self._stop_thread_target, name="pf_%s_stop" % self.child_process.name)
+        stop_thread = threading.Thread(target=self._stop_thread_target, name="pf_%s_stop" % repr(self.child_process))
         stop_thread.daemon = True
         stop_thread.start()
         self._stopped_event.wait(3)
