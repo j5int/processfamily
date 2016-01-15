@@ -558,6 +558,7 @@ class ProcessFamily(object):
 
     def stop(self, timeout=30, wait=True):
         clean_timeout = timeout - 1
+        start_time = time.time()
         if self.CHILD_COMMS_STRATEGY:
             if self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
                 logger.info("Sending stop commands to child processes")
@@ -570,7 +571,8 @@ class ProcessFamily(object):
                     except Exception as e:
                         logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
         if wait:
-            self.wait_for_stop_and_then_terminate()
+            remaining_time = timeout - (time.time() - start_time)
+            self.wait_for_stop_and_then_terminate(timeout=remaining_time)
 
     def wait_for_stop_and_then_terminate(self, timeout=30):
         clean_timeout = timeout - 1
