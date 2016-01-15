@@ -388,6 +388,7 @@ CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
 CHILD_COMMS_STRATEGY_NONE = 0
 CHILD_COMMS_STRATEGY_PIPES_CLOSE = 1
 CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL = 2
+CHILD_COMMS_STRATEGY_SIGNAL = 3
 
 class ProcessFamily(object):
     """
@@ -397,6 +398,7 @@ class ProcessFamily(object):
     ECHO_STD_ERR = False
     CPU_AFFINITY_STRATEGY = CPU_AFFINITY_STRATEGY_PARENT_INCLUDED
     CLOSE_FDS = True
+    CHILD_STOP_SIGNAL = signal.SIGINT
     WIN_PASS_HANDLES_OVER_COMMANDLINE = False
     WIN_USE_JOB_OBJECT = True
     LINUX_USE_PDEATHSIG = True
@@ -573,6 +575,9 @@ class ProcessFamily(object):
                         p._process_instance.stdin.close()
                     except Exception as e:
                         logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
+            elif self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_SIGNAL:
+                logger.info("Sending stop signals to child processes")
+                self.send_stop_signal_to_all()
         if wait:
             self.wait_for_stop_and_then_terminate()
 
@@ -620,6 +625,12 @@ class ProcessFamily(object):
         finally:
             for p in self.child_processes:
                 p._cleanup_queue(response_id)
+
+    def send_stop_signal_to_all(self):
+        signal_name = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}.get(self.CHILD_STOP_SIGNAL, str(self.CHILD_STOP_SIGNAL))
+        for p in list(self.child_processes):
+            logger.info("Sending signal %s to process %r", signal_name, p)
+            os.kill(p._process_instance.pid, self.CHILD_STOP_SIGNAL)
 
     def _find_module_filename(self, modulename):
         """finds the filename of the module with the given name (supports submodules)"""
