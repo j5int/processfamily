@@ -396,17 +396,64 @@ class ChildCommsStrategy(object):
     def __eq__(self, other):
         return type(self) == type(other)
 
+    def get_popen_streams(self, process_family):
+        """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
+        PIPE = subprocess.PIPE
+        streams = {"stdin": PIPE, "stdout": PIPE, "stderr": PIPE}
+        if process_family.ECHO_STD_ERR:
+            streams["stderr"] = open(os.devnull, 'w')
+        return streams
+
+    def wait_for_start(self, process_family, timeout):
+        """Waits (a maximum of timeout) until all children of process_family have started"""
+
+    def send_stop(self, process_family, timeout):
+        """Instructs all process_family children to stop"""
+
 class NoCommsStrategy(ChildCommsStrategy):
-    pass
+    def get_popen_streams(self, process_family):
+        """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
+        return {"stdin": None, "stdout": None, "stderr": None}
 
 class ClosePipesCommsStrategy(ChildCommsStrategy):
-    pass
+    def send_stop(self, process_family, timeout):
+        """Instructs all process_family children to stop"""
+        logger.info("Closing input streams of child processes")
+        for p in list(process_family.child_processes):
+            try:
+                p._process_instance.stdin.close()
+            except Exception as e:
+                logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
+
 
 class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
-    pass
+    def wait_for_start(self, process_family, timeout):
+        """Waits until all children have started"""
+        logger.debug("Waiting for child start events")
+        responses = process_family.send_command_to_all("wait_for_start", timeout=timeout)
+        for i, r in enumerate(responses):
+            if r is None:
+                if process_family.child_processes[i]._process_instance.poll() is None:
+                    logger.error(
+                        "Timed out waiting for %s (PID %d) to complete initialisation",
+                        process_family.get_child_name(i),
+                        process_family.child_processes[i]._process_instance.pid)
+                else:
+                    logger.error(
+                        "%s terminated with response code %d before completing initialisation",
+                        process_family.get_child_name(i),
+                        process_family.child_processes[i]._process_instance.poll())
+
+    def send_stop(self, process_family, timeout):
+        """Instructs all process_family children to stop"""
+        logger.info("Sending stop commands to child processes")
+        process_family.send_command_to_all("stop", timeout=timeout)
 
 class SignalStrategy(ChildCommsStrategy):
-    pass
+    def send_stop(self, process_family, timeout):
+        """Instructs all process_family children to stop"""
+        logger.info("Sending stop signals to child processes")
+        process_family.send_stop_signal_to_all()
 
 CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy()
 CHILD_COMMS_STRATEGY_PIPES_CLOSE = ClosePipesCommsStrategy()
@@ -492,6 +539,8 @@ class ProcessFamily(object):
         logger.debug("Added to job object")
 
     def get_Popen_kwargs(self, i, **kwargs):
+        popen_streams = self.CHILD_COMMS_STRATEGY.get_popen_streams(self)
+        kwargs.update(popen_streams)
         if sys.platform.startswith('win'):
             if self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
                 kwargs['timeout_for_child_stream_duplication_event'] = None
@@ -548,13 +597,7 @@ class ProcessFamily(object):
             logger.info("Starting %s", self.get_child_name(i))
             cmd = self.get_child_process_cmd(i)
             logger.debug("Commandline for %s: %s", self.get_child_name(i), json.dumps(cmd))
-            p = self.get_Popen_class()(
-                    cmd,
-                    **self.get_Popen_kwargs(i,
-                        stdin=subprocess.PIPE if self.CHILD_COMMS_STRATEGY else None,
-                        stdout=subprocess.PIPE if self.CHILD_COMMS_STRATEGY else None,
-                        stderr=(subprocess.PIPE if self.ECHO_STD_ERR else open(os.devnull, 'w')) if self.CHILD_COMMS_STRATEGY else None,
-                        close_fds=self.CLOSE_FDS))
+            p = self.get_Popen_class()(cmd, **self.get_Popen_kwargs(i, close_fds=self.CLOSE_FDS))
 
             if self.CPU_AFFINITY_STRATEGY and p.poll() is None:
                 try:
@@ -568,40 +611,13 @@ class ProcessFamily(object):
             for c in self.child_processes:
                 c._process_instance.wait_for_child_stream_duplication_event(timeout=timeout-(time.time()-s)-3)
 
-        if self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
-            logger.debug("Waiting for child start events")
-            responses = self.send_command_to_all("wait_for_start", timeout=timeout-(time.time()-s))
-            for i, r in enumerate(responses):
-                if r is None:
-                    if self.child_processes[i]._process_instance.poll() is None:
-                        logger.error(
-                            "Timed out waiting for %s (PID %d) to complete initialisation",
-                            self.get_child_name(i),
-                            self.child_processes[i]._process_instance.pid)
-                    else:
-                        logger.error(
-                            "%s terminated with response code %d before completing initialisation",
-                            self.get_child_name(i),
-                            self.child_processes[i]._process_instance.poll())
+        self.CHILD_COMMS_STRATEGY.wait_for_start(self, timeout - (time.time()-s))
         logger.info("All child processes initialised with strategy %r", self.CHILD_COMMS_STRATEGY)
 
     def stop(self, timeout=30, wait=True):
         clean_timeout = timeout - 1
         start_time = time.time()
-        if self.CHILD_COMMS_STRATEGY:
-            if self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
-                logger.info("Sending stop commands to child processes")
-                self.send_command_to_all("stop", timeout=clean_timeout)
-            elif self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PIPES_CLOSE:
-                logger.info("Closing input streams of child processes")
-                for p in list(self.child_processes):
-                    try:
-                        p._process_instance.stdin.close()
-                    except Exception as e:
-                        logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
-            elif self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_SIGNAL:
-                logger.info("Sending stop signals to child processes")
-                self.send_stop_signal_to_all()
+        self.CHILD_COMMS_STRATEGY.send_stop(self, clean_timeout)
         if wait:
             remaining_time = timeout - (time.time() - start_time)
             self.wait_for_stop_and_then_terminate(timeout=remaining_time)
@@ -609,7 +625,7 @@ class ProcessFamily(object):
     def wait_for_stop_and_then_terminate(self, timeout=30):
         clean_timeout = timeout - 1
         start_time = time.time()
-        if self.CHILD_COMMS_STRATEGY:
+        if self.CHILD_COMMS_STRATEGY != CHILD_COMMS_STRATEGY_NONE:
             logger.debug("Waiting for child processes to terminate")
             self._wait_for_children_to_terminate(start_time, clean_timeout)
 
