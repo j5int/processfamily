@@ -537,7 +537,7 @@ class ProcessFamily(object):
                 try:
                     self.set_child_affinity_mask(p.pid, i)
                 except Exception as e:
-                    logger.error("Unable to set affinity for process %d: %s", p.pid, e)
+                    logger.error("Unable to set affinity for %s process %d: %s", self.get_child_name(i), p.pid, e)
             self.child_processes.append(_ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
 
         if sys.platform.startswith('win') and self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
@@ -560,7 +560,7 @@ class ProcessFamily(object):
                             "%s terminated with response code %d before completing initialisation",
                             self.get_child_name(i),
                             self.child_processes[i]._process_instance.poll())
-        logger.info("All child processes initialised")
+        logger.info("All child processes initialised with strategy %d", self.CHILD_COMMS_STRATEGY)
 
     def stop(self, timeout=30, wait=True):
         clean_timeout = timeout - 1
@@ -595,7 +595,7 @@ class ProcessFamily(object):
                 try:
                     kill_process(p._process_instance.pid)
                 except Exception as e:
-                    logger.warning("Failed to kill child process with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
+                    logger.warning("Failed to kill child process %s with PID %s: %s\n%s", p.name, p._process_instance.pid, e, _traceback_str())
             self._wait_for_children_to_terminate(start_time, timeout)
 
     def _wait_for_children_to_terminate(self, start_time, timeout):
