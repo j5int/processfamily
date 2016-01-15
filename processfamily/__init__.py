@@ -251,7 +251,7 @@ class _ChildProcessProxy(object):
             self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target, name="pf_%s_stderr" % self.name)
             self._sys_err_thread.daemon = True
             self._sys_err_thread.start()
-        if self.comms_strategy:
+        if self.comms_strategy != NoCommsStrategy():
             self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target, name="pf_%s_stdout" % self.name)
             self._sys_out_thread.daemon = True
             self._sys_out_thread.start()
