@@ -385,10 +385,33 @@ CPU_AFFINITY_STRATEGY_NONE = 0
 CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
 CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
 
-CHILD_COMMS_STRATEGY_NONE = 0
-CHILD_COMMS_STRATEGY_PIPES_CLOSE = 1
-CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL = 2
-CHILD_COMMS_STRATEGY_SIGNAL = 3
+class ChildCommsStrategy(object):
+    def __init__(self):
+        if type(self) == ChildCommsStrategy:
+            raise NotImplementedError("A concrete strategy needs to be chosen")
+
+    def __repr__(self):
+        return type(self).__name__
+
+    def __eq__(self, other):
+        return type(self) == type(other)
+
+class NoCommsStrategy(ChildCommsStrategy):
+    pass
+
+class ClosePipesCommsStrategy(ChildCommsStrategy):
+    pass
+
+class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
+    pass
+
+class SignalStrategy(ChildCommsStrategy):
+    pass
+
+CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy()
+CHILD_COMMS_STRATEGY_PIPES_CLOSE = ClosePipesCommsStrategy()
+CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL = ProcessFamilyRPCProtocolStrategy()
+CHILD_COMMS_STRATEGY_SIGNAL = SignalStrategy()
 
 class ProcessFamily(object):
     """
@@ -560,7 +583,7 @@ class ProcessFamily(object):
                             "%s terminated with response code %d before completing initialisation",
                             self.get_child_name(i),
                             self.child_processes[i]._process_instance.poll())
-        logger.info("All child processes initialised with strategy %d", self.CHILD_COMMS_STRATEGY)
+        logger.info("All child processes initialised with strategy %r", self.CHILD_COMMS_STRATEGY)
 
     def stop(self, timeout=30, wait=True):
         clean_timeout = timeout - 1
