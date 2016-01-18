@@ -85,6 +85,7 @@ if __name__ == '__main__':
             server = FunkyWebServer()
             server_thread = None
             family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
+            server.family = family
             try:
                 try:
                     family.start(timeout=10)

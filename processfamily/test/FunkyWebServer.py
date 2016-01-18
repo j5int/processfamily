@@ -60,6 +60,9 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Serve a GET request."""
+        if self.path.startswith('/stop_children'):
+            # stop children before we return a response
+            self.funkyserver.stop_children()
         t = self.get_response_text()
         if self.send_head(t):
             self.wfile.write(t)
@@ -69,7 +72,7 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
             if self.path.startswith('/crash'):
                 crash()
-            if self.path.startswith('/stop'):
+            if self.path.startswith('/stop') and not self.path.startswith('/stop_children'):
                 self.funkyserver.stop()
             if self.path.startswith('/interrupt_main'):
                 thread.interrupt_main()
@@ -107,7 +110,9 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             except Exception as e:
                 logging.error("Failed to close file handle and delete file: %s\n%s", e, _traceback_str())
                 return "FAIL"
-
+        if self.path.startswith('/child_processes_terminated'):
+            logging.info("Returning child_processes_terminated: %r", self.funkyserver.child_processes_terminated)
+            return repr(self.funkyserver.child_processes_terminated)
         return "OK"
 
     def _to_json_rsp(self, o):
@@ -166,6 +171,7 @@ class FunkyWebServer(object):
         MyHTTPRequestHandler.funkyserver = self
         self.httpd_lock = threading.RLock()
         self.httpd = None
+        self.child_processes_terminated = None
 
     @classmethod
     def parse_args_and_setup_logging(cls):
@@ -200,14 +206,35 @@ class FunkyWebServer(object):
         with self.httpd_lock:
             self.httpd = MyHTTPServer(self.port)
         logging.info("Process %d listening on port %d", self.process_number, self.port)
-        self.httpd.serve_forever()
+        self.httpd.serve_forever(poll_interval=0.1)
+        logging.info("Process %d finished listening on port %d", self.process_number, self.port)
+
+    def stop_children(self):
+        try:
+            if hasattr(self, 'family'):
+                logging.info("Stopping family...")
+                self.child_processes_terminated = terminated = self.family.stop(timeout=30)
+                if terminated:
+                    logging.info("Had to terminate %d child processes", terminated)
+                else:
+                    logging.info("Didn't have to terminate child processes, they stopped gracefully")
+        except Exception, e:
+            self.child_processes_terminated = e
+            logging.error("Error terminating child processes: %r", e)
 
     def stop(self):
+        with self.httpd_lock:
+            if self.httpd:
+                logging.info("Shutting down httpd (in separate thread)")
+                threading.Thread(name="shutdown", target=self.shutdown_httpd).start()
+
+    def shutdown_httpd(self):
         try:
             with self.httpd_lock:
-                if self.httpd:
-                    self.httpd.shutdown()
-                    self.httpd = None
+                logging.info("Shutting down httpd")
+                self.httpd.shutdown()
+                logging.info("Shut down httpd")
+                self.httpd = None
         finally:
             if self._open_file_handle is not None:
                 logging.info("Closing test file handle")

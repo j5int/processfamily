@@ -615,29 +615,34 @@ class ProcessFamily(object):
         logger.info("All child processes initialised with strategy %r", self.CHILD_COMMS_STRATEGY)
 
     def stop(self, timeout=30, wait=True):
+        """Stops children. Returns the number that required termination (or None if wait=False)"""
         clean_timeout = timeout - 1
         start_time = time.time()
         self.CHILD_COMMS_STRATEGY.send_stop(self, clean_timeout)
         if wait:
             remaining_time = timeout - (time.time() - start_time)
-            self.wait_for_stop_and_then_terminate(timeout=remaining_time)
+            return self.wait_for_stop_and_then_terminate(timeout=remaining_time)
 
     def wait_for_stop_and_then_terminate(self, timeout=30):
+        """Waits for children to stop, but terminates them if necessary. Returns the number terminated"""
         clean_timeout = timeout - 1
         start_time = time.time()
         if self.CHILD_COMMS_STRATEGY != CHILD_COMMS_STRATEGY_NONE:
             logger.debug("Waiting for child processes to terminate")
             self._wait_for_children_to_terminate(start_time, clean_timeout)
 
+        num_terminated = 0
         if self.child_processes:
             #We've nearly run out of time - let's try and kill them:
             logger.info("Attempting to kill child processes")
             for p in list(self.child_processes):
                 try:
+                    num_terminated += 1
                     kill_process(p._process_instance.pid)
                 except Exception as e:
                     logger.warning("Failed to kill child process %s with PID %s: %s\n%s", p.name, p._process_instance.pid, e, _traceback_str())
             self._wait_for_children_to_terminate(start_time, timeout)
+        return num_terminated
 
     def _wait_for_children_to_terminate(self, start_time, timeout):
         first_run = True
