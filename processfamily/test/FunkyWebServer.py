@@ -60,9 +60,9 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Serve a GET request."""
-        if self.path.startswith('/stop_children'):
+        if self.path.startswith('/stop'):
             # stop children before we return a response
-            self.funkyserver.stop_children()
+            self.funkyserver.pre_stop()
         t = self.get_response_text()
         if self.send_head(t):
             self.wfile.write(t)
@@ -72,7 +72,7 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
             if self.path.startswith('/crash'):
                 crash()
-            if self.path.startswith('/stop') and not self.path.startswith('/stop_children'):
+            if self.path.startswith('/stop'):
                 self.funkyserver.stop()
             if self.path.startswith('/interrupt_main'):
                 thread.interrupt_main()
@@ -110,7 +110,7 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             except Exception as e:
                 logging.error("Failed to close file handle and delete file: %s\n%s", e, _traceback_str())
                 return "FAIL"
-        if self.path.startswith('/child_processes_terminated'):
+        if self.path.startswith('/stop'):
             logging.info("Returning child_processes_terminated: %r", self.funkyserver.child_processes_terminated)
             return repr(self.funkyserver.child_processes_terminated)
         return "OK"
@@ -209,7 +209,7 @@ class FunkyWebServer(object):
         self.httpd.serve_forever(poll_interval=0.1)
         logging.info("Process %d finished listening on port %d", self.process_number, self.port)
 
-    def stop_children(self):
+    def pre_stop(self):
         try:
             if hasattr(self, 'family'):
                 logging.info("Stopping family...")
