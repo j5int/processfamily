@@ -151,9 +151,16 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                 pid = f.read().strip()
             kill_process(int(pid))
 
+    def check_stop(self, force_kills=0):
+        """Checks that a stop succeeds, and that the number of child processes that had to be terminated is as expected"""
+        child_processes_terminated = self.send_parent_http_command("stop")
+        if child_processes_terminated != str(force_kills):
+            raise ValueError("Stop received, but parent reports %r instead of %r child processes terminated",
+                             child_processes_terminated, force_kills)
+
     def test_parent_stop(self):
         self.start_up()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_parent_exit(self):
         self.start_up()
@@ -176,7 +183,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def test_parent_stop_child_locked_up(self):
         self.start_up()
         self.freeze_up_middle_child()
-        self.send_parent_http_command("stop")
+        self.check_stop(1)
         #This needs time to wait for the child for 10 seconds:
         self.wait_for_parent_to_stop(11)
 
@@ -212,32 +219,31 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def test_child_exit_on_start(self):
         self.start_up(test_command='child_exit_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_error_during_run(self):
         self.start_up(test_command='child_error_during_run', wait_for_middle_child=False)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_freeze_on_start(self):
         self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
-        self.wait_for_parent_to_stop(11)
+        self.check_stop(1)
 
     def test_child_error_on_start(self):
         self.start_up(test_command='child_error_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_error_during_init(self):
         self.start_up(test_command='child_error_during_init', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_freeze_during_init(self):
         self.start_up(test_command='child_freeze_during_init', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop(1)
         self.wait_for_parent_to_stop(11)
 
     def test_child_crash_on_start(self):
@@ -245,7 +251,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
             self.skipTest(self.skip_crash_test)
         self.start_up(test_command='child_crash_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     if not sys.platform.startswith('win'):
         def test_sigint(self):
@@ -263,17 +269,17 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("OK", result, "Command to close file and delete it failed (got response: %s)" % result)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_echo_std_err_on(self):
         self.start_up(test_command='echo_std_err')
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_handles_over_commandline_off(self):
         if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
             self.skipTest("This test is not supported on this platform")
         self.start_up(test_command='handles_over_commandline_off')
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_handles_over_commandline_off_close_fds_off(self):
         if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
@@ -281,7 +287,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up(test_command='handles_over_commandline_off_close_fds_off')
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("FAIL", result, "Command to close file and delete it did not fail (got response: %s)" % result)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_close_fds_off(self):
         self.start_up(test_command='close_fds_off')
@@ -292,32 +298,29 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         else:
             #TODO: a relevant test on linux?
             pass
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_comms_strategy_stdin_close(self):
         self.start_up(test_command='use_cat', wait_for_children=False)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_comms_strategy_none(self):
         self.start_up(test_command='use_cat_comms_none', wait_for_children=False)
-        self.send_parent_http_command("stop")
+        # we don't actually have the ability to tell these children to stop
+        self.check_stop(3)
 
     def test_child_comms_strategy_signal(self):
         self.start_up(test_command='use_signal', wait_for_children=False)
-        self.send_parent_http_command("stop_children")
-        child_processes_terminated = self.send_parent_http_command("stop")
-        logging.info("Terminated %r processes (according to parent)", child_processes_terminated)
-        if child_processes_terminated != "0":
-            raise ValueError("Stop received, but %r child processes terminated" % child_processes_terminated)
+        self.check_stop()
 
     def test_use_job_object_off(self):
         self.start_up(test_command=
                       'use_job_object_off')
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_cpu_affinity_off(self):
         self.start_up(test_command='cpu_affinity_off')
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_handles_over_commandline_off_file_open_by_parent(self):
         if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
@@ -325,7 +328,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up(test_command='handles_over_commandline_off')
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("OK", result, "Command to close file and delete it failed (got response: %s)" % result)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def freeze_up_middle_child(self):
         #First check that we can do this fast (i.e. things aren't stuttering because of environment):
