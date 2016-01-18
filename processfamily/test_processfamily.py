@@ -302,8 +302,17 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up(test_command='use_cat_comms_none', wait_for_children=False)
         self.send_parent_http_command("stop")
 
+    def test_child_comms_strategy_signal(self):
+        self.start_up(test_command='use_signal', wait_for_children=False)
+        self.send_parent_http_command("stop_children")
+        child_processes_terminated = self.send_parent_http_command("stop")
+        logging.info("Terminated %r processes (according to parent)", child_processes_terminated)
+        if child_processes_terminated != "0":
+            raise ValueError("Stop received, but %r child processes terminated" % child_processes_terminated)
+
     def test_use_job_object_off(self):
-        self.start_up(test_command='use_job_object_off')
+        self.start_up(test_command=
+                      'use_job_object_off')
         self.send_parent_http_command("stop")
 
     def test_cpu_affinity_off(self):
