@@ -388,6 +388,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         while time.time()-start_time < timeout:
             if process.poll() is None:
                 time.sleep(0.3)
+            else:
+                return
 
 
 class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
