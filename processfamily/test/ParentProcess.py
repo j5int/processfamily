@@ -81,6 +81,7 @@ class ProcessFamilyForTests(processfamily.ProcessFamily):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
+    STARTUP_TIMEOUT = int(os.environ.get("STARTUP_TIMEOUT", "") or "10")
     logging.info("Starting")
     try:
         try:
@@ -90,7 +91,7 @@ if __name__ == '__main__':
             server.family = family
             try:
                 try:
-                    family.start(timeout=10)
+                    family.start(timeout=STARTUP_TIMEOUT)
                     server_thread = threading.Thread(target=server.run)
                     server_thread.start()
                     while server_thread.isAlive():

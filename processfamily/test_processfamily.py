@@ -93,7 +93,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.assertFalse(processes_left_running, msg="There should have been no PIDs left running but there were: %s" % (', '.join([str(p) for p in processes_left_running])))
 
 
-    def start_up(self, test_command=None, wait_for_middle_child=True, wait_for_children=True):
+    def start_up(self, test_command=None, wait_for_middle_child=True, wait_for_children=True, parent_timeout=None):
         command_file = os.path.join(os.path.dirname(__file__), 'test', 'tmp', 'command.txt')
         if test_command:
             with open(command_file, "w") as f:
@@ -101,17 +101,16 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         elif os.path.exists(command_file):
             os.remove(command_file)
 
-        self.start_parent_process()
+        self.start_parent_process(timeout=parent_timeout)
         #Wait up to 15 secs for the all ports to be available (the parent might wait 10 for a middle child):
         start_time = time.time()
         still_waiting = True
+        ports_to_wait = range(4) if wait_for_children else [0]
+        if not wait_for_middle_child:
+            ports_to_wait.remove(2)
         while still_waiting and time.time() - start_time < 15:
             still_waiting = False
-            for i in range(4):
-                if i > 0 and not wait_for_children:
-                    continue
-                if i == 2 and not wait_for_middle_child:
-                    continue
+            for i in ports_to_wait:
                 try:
                     s = socket.socket()
                     try:
@@ -184,7 +183,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def test_parent_stop_child_locked_up(self):
         self.start_up()
         self.freeze_up_middle_child()
-        self.check_stop(1)
+        self.check_stop(1, timeout=5)
         #This needs time to wait for the child for 10 seconds:
         self.wait_for_parent_to_stop(11)
 
@@ -227,7 +226,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.check_stop()
 
     def test_child_freeze_on_start(self):
-        self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
+        self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False, parent_timeout=2)
         self.assert_middle_child_port_unbound()
         self.check_stop(1, timeout=5)
 
@@ -242,7 +241,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.check_stop()
 
     def test_child_freeze_during_init(self):
-        self.start_up(test_command='child_freeze_during_init', wait_for_middle_child=False)
+        self.start_up(test_command='child_freeze_during_init', wait_for_middle_child=False, parent_timeout=2)
         self.assert_middle_child_port_unbound()
         self.check_stop(1, timeout=5)
         self.wait_for_parent_to_stop(11)
@@ -397,13 +396,16 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
     skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
-    def start_parent_process(self):
+    def start_parent_process(self, timeout=None):
         kwargs={}
         if sys.platform.startswith('win'):
             kwargs['creationflags'] = CREATE_BREAKAWAY_FROM_JOB
+        environ = os.environ.copy()
+        if timeout:
+            environ["STARTUP_TIMEOUT"] = str(timeout)
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
-            close_fds=True, **kwargs)
+            close_fds=True, env=environ, **kwargs)
         threading.Thread(target=self.parent_process.communicate).start()
 
     def wait_for_parent_to_stop(self, timeout):
