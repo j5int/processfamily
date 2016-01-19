@@ -2,6 +2,7 @@ __author__ = 'matth'
 
 import BaseHTTPServer
 import SocketServer
+import urlparse
 import argparse
 from processfamily.test import Config
 import logging
@@ -60,9 +61,13 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Serve a GET request."""
-        if self.path.startswith('/stop'):
+        parsed_url = urlparse.urlparse(self.path)
+        params = urlparse.parse_qs(parsed_url.query)
+        path = parsed_url.path
+        if path.startswith('/stop'):
             # stop children before we return a response
-            self.funkyserver.pre_stop()
+            timeout = int((params.get("timeout", []) or ["30"])[0])
+            self.funkyserver.pre_stop(timeout=timeout)
         t = self.get_response_text()
         if self.send_head(t):
             self.wfile.write(t)
@@ -70,16 +75,16 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.finish()
             self.http_server.shutdown_request(self.connection)
 
-            if self.path.startswith('/crash'):
+            if path.startswith('/crash'):
                 crash()
-            if self.path.startswith('/stop'):
+            if path.startswith('/stop'):
                 self.funkyserver.stop()
-            if self.path.startswith('/interrupt_main'):
+            if path.startswith('/interrupt_main'):
                 thread.interrupt_main()
-            if self.path.startswith('/exit'):
+            if path.startswith('/exit'):
                 os._exit(1)
-            if self.path.startswith('/hold_gil_'):
-                t = int(self.path.split('_')[-1])
+            if path.startswith('/hold_gil'):
+                t = int((params.get("t", []) or ["100"])[0])
                 hold_gil(t)
 
     def do_HEAD(self):
@@ -209,11 +214,11 @@ class FunkyWebServer(object):
         self.httpd.serve_forever(poll_interval=0.1)
         logging.info("Process %d finished listening on port %d", self.process_number, self.port)
 
-    def pre_stop(self):
+    def pre_stop(self, timeout=30):
         try:
             if hasattr(self, 'family'):
                 logging.info("Stopping family...")
-                self.child_processes_terminated = terminated = self.family.stop(timeout=30)
+                self.child_processes_terminated = terminated = self.family.stop(timeout=timeout)
                 if terminated:
                     logging.info("Had to terminate %d child processes", terminated)
                 else:

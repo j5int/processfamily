@@ -151,9 +151,10 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                 pid = f.read().strip()
             kill_process(int(pid))
 
-    def check_stop(self, force_kills=0):
+    def check_stop(self, force_kills=0, timeout=None):
         """Checks that a stop succeeds, and that the number of child processes that had to be terminated is as expected"""
-        child_processes_terminated = self.send_parent_http_command("stop")
+        params = {"timeout": str(timeout)} if timeout else {}
+        child_processes_terminated = self.send_parent_http_command("stop", params=params)
         if child_processes_terminated != str(force_kills):
             raise ValueError("Stop received, but parent reports %r instead of %r child processes terminated",
                              child_processes_terminated, force_kills)
@@ -228,7 +229,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def test_child_freeze_on_start(self):
         self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.check_stop(1)
+        self.check_stop(1, timeout=5)
 
     def test_child_error_on_start(self):
         self.start_up(test_command='child_error_on_start', wait_for_middle_child=False)
@@ -243,7 +244,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def test_child_freeze_during_init(self):
         self.start_up(test_command='child_freeze_during_init', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.check_stop(1)
+        self.check_stop(1, timeout=5)
         self.wait_for_parent_to_stop(11)
 
     def test_child_crash_on_start(self):
@@ -334,7 +335,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         #First check that we can do this fast (i.e. things aren't stuttering because of environment):
         for i in range(5):
             self.send_middle_child_http_command("", timeout=4)
-        self.send_middle_child_http_command("hold_gil_%d" % (60*10)) #Freeze up for 10 minutes
+        self.send_middle_child_http_command("hold_gil?t=%d" % (60*10)) #Freeze up for 10 minutes
         while True:
             #Try and do this request until it takes longer than 4 secs - this would mean that we have successfully got stuck
             try:
@@ -364,14 +365,14 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def get_path_to_ParentProcessPy(self):
         return os.path.join(os.path.dirname(__file__), 'test', 'ParentProcess.py')
 
-    def send_parent_http_command(self, command, **kwargs):
-        return self.send_http_command(Config.get_starting_port_nr(), command, **kwargs)
+    def send_parent_http_command(self, command, params=None, **kwargs):
+        return self.send_http_command(Config.get_starting_port_nr(), command, params=params, **kwargs)
 
-    def send_middle_child_http_command(self, command, **kwargs):
-        return self.send_http_command(Config.get_starting_port_nr()+2, command, **kwargs)
+    def send_middle_child_http_command(self, command, params=None, **kwargs):
+        return self.send_http_command(Config.get_starting_port_nr()+2, command, params=params, **kwargs)
 
-    def send_http_command(self, port, command, **kwargs):
-        r = requests.get('http://localhost:%d/%s' % (port, command), **kwargs)
+    def send_http_command(self, port, command, params=None, **kwargs):
+        r = requests.get('http://localhost:%d/%s' % (port, command), params=params, **kwargs)
         j = r.json
         if callable(j):
             return j()
