@@ -99,8 +99,6 @@ if __name__ == '__main__':
                 except KeyboardInterrupt:
                     logging.info("Stopping...")
                     server.stop()
-                finally:
-                    family.stop(timeout=10)
             finally:
                 if server_thread and server_thread.isAlive():
                     server_thread.join(5)
