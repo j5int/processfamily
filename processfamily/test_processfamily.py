@@ -334,12 +334,12 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def freeze_up_middle_child(self):
         #First check that we can do this fast (i.e. things aren't stuttering because of environment):
         for i in range(5):
-            self.send_middle_child_http_command("", timeout=4)
+            self.send_middle_child_http_command("", timeout=1)
         self.send_middle_child_http_command("hold_gil?t=%d" % (60*10)) #Freeze up for 10 minutes
         while True:
-            #Try and do this request until it takes longer than 4 secs - this would mean that we have successfully got stuck
+            #Try and do this request until it takes longer than 1 sec - this would mean that we have successfully got stuck
             try:
-                self.send_middle_child_http_command("", timeout=4)
+                self.send_middle_child_http_command("", timeout=1)
             except requests.exceptions.Timeout as t:
                 break
 
