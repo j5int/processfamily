@@ -330,7 +330,7 @@ class _ChildProcessProxy(object):
                     if not line:
                         break
                     try:
-                        if self.comms_strategy.sends_responses_on_stdout():
+                        if self.comms_strategy.SENDS_STDOUT_RESPONSES:
                             self._handle_response_line(line)
                         else:
                             self.process_family.handle_sys_out_line(line)
@@ -379,6 +379,8 @@ CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
 
 class ChildCommsStrategy(object):
     MONITOR_STDOUT = True
+    SENDS_STDOUT_RESPONSES = False
+    CAN_WAIT_FOR_TERMINATE = True
 
     def __init__(self):
         if type(self) == ChildCommsStrategy:
@@ -389,14 +391,6 @@ class ChildCommsStrategy(object):
 
     def __eq__(self, other):
         return type(self) == type(other)
-
-    def can_wait_for_terminate(self):
-        """True if this strategy supports waiting for child processes to terminate"""
-        return True
-
-    def sends_responses_on_stdout(self):
-        """True if we should read lines from child process stdout and treat them as command responses"""
-        return False
 
     def get_popen_streams(self, process_family):
         """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
@@ -414,10 +408,7 @@ class ChildCommsStrategy(object):
 
 class NoCommsStrategy(ChildCommsStrategy):
     MONITOR_STDOUT = False
-
-    def can_wait_for_terminate(self):
-        """True if this strategy supports waiting for child processes to terminate; False for NoCommsStrategy"""
-        return False
+    CAN_WAIT_FOR_TERMINATE = False
 
     def get_popen_streams(self, process_family):
         """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
@@ -435,9 +426,7 @@ class ClosePipesCommsStrategy(ChildCommsStrategy):
 
 
 class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
-    def sends_responses_on_stdout(self):
-        """True if we should read lines from child process stdout and treat them as command responses"""
-        return True
+    SENDS_STDOUT_RESPONSES = True
 
     def wait_for_start(self, process_family, timeout):
         """Waits until all children have started"""
@@ -640,7 +629,7 @@ class ProcessFamily(object):
         """Waits for children to stop, but terminates them if necessary. Returns the number terminated"""
         clean_timeout = timeout - 1
         start_time = time.time()
-        if self.comms_strategy.can_wait_for_terminate():
+        if self.comms_strategy.CAN_WAIT_FOR_TERMINATE:
             logger.debug("Waiting for child processes to terminate")
             self._wait_for_children_to_terminate(start_time, clean_timeout)
 
