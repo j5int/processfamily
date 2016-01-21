@@ -238,7 +238,7 @@ class _ChildProcessProxy(object):
     def __init__(self, process_instance, echo_std_err, child_index, process_family):
         self.process_family = process_family
         self.child_index = child_index
-        self.comms_strategy = process_family.comms_strategy
+        self.comms_strategy = process_family.CHILD_COMMS_STRATEGY(self)
         self.name = self.process_family.get_child_name(child_index)
         self._process_instance = process_instance
 
@@ -255,6 +255,9 @@ class _ChildProcessProxy(object):
             self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target, name="pf_%s_stdout" % self.name)
             self._sys_out_thread.daemon = True
             self._sys_out_thread.start()
+
+    def __repr__(self):
+        return "%s (%r)" % (self.name, self._process_instance)
 
     def _send_command_req(self, response_id, command, params=None):
         with self._rsp_queues_lock:
@@ -382,12 +385,13 @@ class ChildCommsStrategy(object):
     SENDS_STDOUT_RESPONSES = False
     CAN_WAIT_FOR_TERMINATE = True
 
-    def __init__(self):
+    def __init__(self, child_process):
         if type(self) == ChildCommsStrategy:
             raise NotImplementedError("A concrete strategy needs to be chosen")
+        self.child_process = child_process
 
     def __repr__(self):
-        return type(self).__name__
+        return "%s(%r)" % (type(self).__name__, self.child_process)
 
     def __eq__(self, other):
         return type(self) == type(other)
@@ -401,13 +405,13 @@ class ChildCommsStrategy(object):
             streams["stderr"] = open(os.devnull, 'w')
         return streams
 
-    def monitor_child_startup(self, child_process, end_time):
+    def monitor_child_startup(self, end_time):
         """generator method to monitor process startup, with the first yield after sending a ping,
         the next after receiving a response, and stopping after cleanup"""
         yield
         yield
 
-    def stop_child(self, child_process, end_time):
+    def stop_child(self, end_time):
         """generator method to send stop to child, with the first yield after sending the shutdown command,
         the next after receiving a response, and stopping after cleanup"""
         yield
@@ -424,9 +428,9 @@ class NoCommsStrategy(ChildCommsStrategy):
         return {"stdin": None, "stdout": None, "stderr": None}
 
 class ClosePipesCommsStrategy(ChildCommsStrategy):
-    def stop_child(self, child_process, end_time):
-        p = child_process._process_instance
-        logger.info("Closing stdin for process %r", child_process)
+    def stop_child(self, end_time):
+        p = self.child_process._process_instance
+        logger.info("Closing stdin for process %r", self.child_process)
         try:
             p.stdin.close()
         except Exception as e:
@@ -438,44 +442,44 @@ class ClosePipesCommsStrategy(ChildCommsStrategy):
 class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
     SENDS_STDOUT_RESPONSES = True
 
-    def monitor_child_startup(self, child_process, end_time):
+    def monitor_child_startup(self, end_time):
         """generator method to monitor process startup, with the first yield after sending a ping,
         the next after receiving a response, and stopping after cleanup"""
         response_id = str(uuid.uuid4())
         try:
-            yield child_process._send_command_req(response_id, "wait_for_start")
-            response = child_process._wait_for_response(response_id, end_time - time.time())
+            yield self.child_process._send_command_req(response_id, "wait_for_start")
+            response = self.child_process._wait_for_response(response_id, end_time - time.time())
             yield response
         finally:
-            child_process._cleanup_queue(response_id)
+            self.child_process._cleanup_queue(response_id)
         if response is None:
-            poll_result = child_process._process_instance.poll()
+            poll_result = self.child_process._process_instance.poll()
             if poll_result is None:
                 logger.error("Timed out waiting for %s (PID %d) to complete initialisation",
-                             child_process.name, child_process._process_instance.pid)
+                             self.child_process.name, self.child_process._process_instance.pid)
             else:
                 logger.error("%s terminated with response code %d before completing initialisation",
-                             child_process.name, poll_result)
+                             self.child_process.name, poll_result)
 
-    def stop_child(self, child_process, end_time):
+    def stop_child(self, end_time):
         """generator method to send stop to child, with the first yield after sending the shutdown command,
         the next after receiving a response, and stopping after cleanup"""
         response_id = str(uuid.uuid4())
         try:
-            yield child_process._send_command_req(response_id, "stop")
-            yield child_process._wait_for_response(response_id, end_time - time.time())
+            yield self.child_process._send_command_req(response_id, "stop")
+            yield self.child_process._wait_for_response(response_id, end_time - time.time())
         finally:
-            child_process._cleanup_queue(response_id)
+            self.child_process._cleanup_queue(response_id)
 
 
 class SignalStrategy(ChildCommsStrategy):
-    def stop_child(self, child_process, end_time):
+    def stop_child(self, end_time):
         """generator method to send stop to child, with the first yield after sending the shutdown command,
         the next after receiving a response, and stopping after cleanup"""
-        signum = child_process.process_family.CHILD_STOP_SIGNAL
+        signum = self.child_process.process_family.CHILD_STOP_SIGNAL
         signal_name = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}.get(signum, str(signum))
-        logger.info("Sending signal %s to process %r", signal_name, child_process)
-        os.kill(child_process._process_instance.pid, signum)
+        logger.info("Sending signal %s to process %r", signal_name, self.child_process)
+        os.kill(self.child_process._process_instance.pid, signum)
         yield
         yield
 
@@ -500,7 +504,6 @@ class ProcessFamily(object):
     CHILD_COMMS_STRATEGY = CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL
 
     def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=True):
-        self.comms_strategy = self.CHILD_COMMS_STRATEGY()
         self.child_process_module_name = child_process_module_name
         self.run_as_script = run_as_script
 
@@ -639,15 +642,15 @@ class ProcessFamily(object):
                 c._process_instance.wait_for_child_stream_duplication_event(timeout=timeout-(time.time()-s)-3)
 
         self.wait_for_start(timeout - (time.time()-s))
-        logger.info("All child processes initialised with strategy %r", self.comms_strategy)
+        logger.info("All child processes initialised with strategy %s", self.CHILD_COMMS_STRATEGY.__name__)
 
     def wait_for_start(self, timeout):
         """Waits (a maximum of timeout) until all children of process_family have started"""
         end_time = time.time() + timeout
         command_processes = []
         try:
-            for p in self.child_processes:
-                command_processes.append(self.comms_strategy.monitor_child_startup(p, end_time))
+            for child_process in self.child_processes:
+                command_processes.append(child_process.comms_strategy.monitor_child_startup(end_time))
             for c in command_processes:
                 # ping the process
                 c.next()
@@ -672,8 +675,8 @@ class ProcessFamily(object):
         end_time = time.time() + timeout
         command_processes = []
         try:
-            for p in self.child_processes:
-                command_processes.append(self.comms_strategy.stop_child(p, end_time))
+            for child_process in self.child_processes:
+                command_processes.append(child_process.comms_strategy.stop_child(end_time))
             for c in command_processes:
                 # ping the process
                 c.next()
