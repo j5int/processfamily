@@ -481,12 +481,14 @@ class ProcessFamily(object):
         self.child_process_module_name = child_process_module_name
         self.run_as_script = run_as_script
 
-        if self.CPU_AFFINITY_STRATEGY:
+        if number_of_child_processes:
+            self.number_of_child_processes = number_of_child_processes
+        else:
             self.cpu_count = cpu_count()
-            if number_of_child_processes:
-                self.number_of_child_processes = number_of_child_processes
-            elif self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
+            if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
                 self.number_of_child_processes = self.cpu_count-1
+            elif self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_CHILDREN_ONLY:
+                self.number_of_child_processes = self.cpu_count
             else:
                 self.number_of_child_processes = self.cpu_count
 
@@ -629,7 +631,7 @@ class ProcessFamily(object):
         """Waits for children to stop, but terminates them if necessary. Returns the number terminated"""
         clean_timeout = timeout - 1
         start_time = time.time()
-        if self.comms_strategy.CAN_WAIT_FOR_TERMINATE:
+        if self.CHILD_COMMS_STRATEGY.CAN_WAIT_FOR_TERMINATE:
             logger.debug("Waiting for child processes to terminate")
             self._wait_for_children_to_terminate(start_time, clean_timeout)
 
