@@ -311,6 +311,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
 
     def test_child_comms_strategy_signal(self):
         self.start_up(test_command='use_signal', wait_for_children=False)
+        # since we're not waiting for the children to start up, give them a chance to register signal handlers
+        time.sleep(0.5)
         self.check_stop()
 
     def test_use_job_object_off(self):
