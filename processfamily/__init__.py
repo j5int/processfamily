@@ -256,14 +256,6 @@ class _ChildProcessProxy(object):
             self._sys_out_thread.daemon = True
             self._sys_out_thread.start()
 
-    def send_command(self, command, timeout, params=None):
-        response_id = str(uuid.uuid4())
-        try:
-            self._send_command_req(response_id, command, params=params)
-            return self._wait_for_response(response_id, timeout)
-        finally:
-            self._cleanup_queue(response_id)
-
     def _send_command_req(self, response_id, command, params=None):
         with self._rsp_queues_lock:
             if self._rsp_queues is None:
