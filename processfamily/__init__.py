@@ -401,11 +401,49 @@ class ChildCommsStrategy(object):
             streams["stderr"] = open(os.devnull, 'w')
         return streams
 
+    def monitor_child_startup(self, child_process, end_time):
+        """generator method to monitor process startup, with the first yield after sending a ping,
+        the next after receiving a response, and stopping after cleanup"""
+        yield
+        yield
+
+    def stop_child(self, child_process, end_time):
+        """generator method to send stop to child, with the first yield after sending the shutdown command,
+        the next after receiving a response, and stopping after cleanup"""
+        yield
+        yield
+
     def wait_for_start(self, process_family, timeout):
         """Waits (a maximum of timeout) until all children of process_family have started"""
+        end_time = time.time() + timeout
+        command_processes = []
+        try:
+            for p in process_family.child_processes:
+                command_processes.append(self.monitor_child_startup(p, end_time))
+            for c in command_processes:
+                # ping the process
+                c.next()
+            # results
+            return [c.next() for c in command_processes]
+        finally:
+            for c in command_processes:
+                c.close()
 
     def send_stop(self, process_family, timeout):
         """Instructs all process_family children to stop"""
+        end_time = time.time() + timeout
+        command_processes = []
+        try:
+            for p in process_family.child_processes:
+                command_processes.append(self.stop_child(p, end_time))
+            for c in command_processes:
+                # ping the process
+                c.next()
+            # results
+            return [c.next() for c in command_processes]
+        finally:
+            for c in command_processes:
+                c.close()
 
 class NoCommsStrategy(ChildCommsStrategy):
     MONITOR_STDOUT = False
@@ -417,87 +455,60 @@ class NoCommsStrategy(ChildCommsStrategy):
         return {"stdin": None, "stdout": None, "stderr": None}
 
 class ClosePipesCommsStrategy(ChildCommsStrategy):
-    def send_stop_to_child(self, child_process, timeout):
+    def stop_child(self, child_process, end_time):
         p = child_process._process_instance
+        logger.info("Closing stdin for process %r", child_process)
         try:
             p.stdin.close()
         except Exception as e:
             logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p.pid, e, _traceback_str())
-
-    def send_stop(self, process_family, timeout):
-        """Instructs all process_family children to stop"""
-        logger.info("Closing input streams of child processes")
-        for p in list(process_family.child_processes):
-            try:
-                p._process_instance.stdin.close()
-            except Exception as e:
-                logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
+        yield
+        yield
 
 
 class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
     SENDS_STDOUT_RESPONSES = True
-    def send_command_to_child(self, child_process, command, end_time, params=None):
-        """Helper method that returns a generator, with the first yield after sending the command
+
+    def monitor_child_startup(self, child_process, end_time):
+        """generator method to monitor process startup, with the first yield after sending a ping,
         the next after receiving a response, and stopping after cleanup"""
         response_id = str(uuid.uuid4())
         try:
-            yield child_process._send_command_req(response_id, command, params=params)
+            yield child_process._send_command_req(response_id, "wait_for_start")
+            response = child_process._wait_for_response(response_id, end_time - time.time())
+            yield response
+        finally:
+            child_process._cleanup_queue(response_id)
+        if response is None:
+            poll_result = child_process._process_instance.poll()
+            if poll_result is None:
+                logger.error("Timed out waiting for %s (PID %d) to complete initialisation",
+                             child_process.name, child_process._process_instance.pid)
+            else:
+                logger.error("%s terminated with response code %d before completing initialisation",
+                             child_process.name, poll_result)
+
+    def stop_child(self, child_process, end_time):
+        """generator method to send stop to child, with the first yield after sending the shutdown command,
+        the next after receiving a response, and stopping after cleanup"""
+        response_id = str(uuid.uuid4())
+        try:
+            yield child_process._send_command_req(response_id, "stop")
             yield child_process._wait_for_response(response_id, end_time - time.time())
         finally:
             child_process._cleanup_queue(response_id)
 
-    def send_command_to_all(self, process_family, command, timeout=30, params=None):
-        end_time = time.time() + timeout
-        command_processes = []
-        try:
-            for p in process_family.child_processes:
-                command_processes.append(self.send_command_to_child(p, command, end_time, params=params))
-            for c in command_processes:
-                # actually send the command
-                c.next()
-            return [c.next() for c in command_processes]
-        finally:
-            for c in command_processes:
-                # exhaust the queue, to ensure cleanup
-                list(c)
-
-    def wait_for_start(self, process_family, timeout):
-        """Waits until all children have started"""
-        logger.debug("Waiting for child start events")
-        responses = self.send_command_to_all(process_family, "wait_for_start", timeout=timeout)
-        for i, r in enumerate(responses):
-            if r is None:
-                if process_family.child_processes[i]._process_instance.poll() is None:
-                    logger.error(
-                        "Timed out waiting for %s (PID %d) to complete initialisation",
-                        process_family.get_child_name(i),
-                        process_family.child_processes[i]._process_instance.pid)
-                else:
-                    logger.error(
-                        "%s terminated with response code %d before completing initialisation",
-                        process_family.get_child_name(i),
-                        process_family.child_processes[i]._process_instance.poll())
-
-    def send_stop(self, process_family, timeout):
-        """Instructs all process_family children to stop"""
-        logger.info("Sending stop commands to child processes")
-        self.send_command_to_all(process_family, "stop", timeout=timeout)
 
 class SignalStrategy(ChildCommsStrategy):
-    def send_signal_to_child(self, child_process, signum):
+    def stop_child(self, child_process, end_time):
+        """generator method to send stop to child, with the first yield after sending the shutdown command,
+        the next after receiving a response, and stopping after cleanup"""
+        signum = child_process.process_family.CHILD_STOP_SIGNAL
         signal_name = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}.get(signum, str(signum))
         logger.info("Sending signal %s to process %r", signal_name, child_process)
         os.kill(child_process._process_instance.pid, signum)
-
-    def send_signal_to_all(self, process_family, signum):
-        for p in list(process_family.child_processes):
-            self.send_signal_to_child(p, signum)
-
-    def send_stop(self, process_family, timeout):
-        """Instructs all process_family children to stop"""
-        logger.info("Sending stop signals to child processes")
-        for p in list(process_family.child_processes):
-            self.send_signal_to_child(p, process_family.CHILD_STOP_SIGNAL)
+        yield
+        yield
 
 CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy
 CHILD_COMMS_STRATEGY_PIPES_CLOSE = ClosePipesCommsStrategy
