@@ -428,10 +428,26 @@ class ClosePipesCommsStrategy(ChildCommsStrategy):
 class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
     SENDS_STDOUT_RESPONSES = True
 
+    def send_command_to_all(self, process_family, command, timeout=30, params=None):
+        start_time = time.time()
+        response_id = str(uuid.uuid4())
+        responses = [None]*len(process_family.child_processes)
+        try:
+            for p in process_family.child_processes:
+                p._send_command_req(response_id, command, params=params)
+
+            for i, p in enumerate(process_family.child_processes):
+                time_left = timeout - (time.time() - start_time)
+                responses[i] = p._wait_for_response(response_id, time_left)
+            return responses
+        finally:
+            for p in process_family.child_processes:
+                p._cleanup_queue(response_id)
+
     def wait_for_start(self, process_family, timeout):
         """Waits until all children have started"""
         logger.debug("Waiting for child start events")
-        responses = process_family.send_command_to_all("wait_for_start", timeout=timeout)
+        responses = self.send_command_to_all(process_family, "wait_for_start", timeout=timeout)
         for i, r in enumerate(responses):
             if r is None:
                 if process_family.child_processes[i]._process_instance.poll() is None:
@@ -448,13 +464,19 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
     def send_stop(self, process_family, timeout):
         """Instructs all process_family children to stop"""
         logger.info("Sending stop commands to child processes")
-        process_family.send_command_to_all("stop", timeout=timeout)
+        self.send_command_to_all(process_family, "stop", timeout=timeout)
 
 class SignalStrategy(ChildCommsStrategy):
+    def send_signal_to_all(self, process_family, signum):
+        signal_name = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}.get(signum, str(signum))
+        for p in list(process_family.child_processes):
+            logger.info("Sending signal %s to process %r", signal_name, p)
+            os.kill(p._process_instance.pid, signum)
+
     def send_stop(self, process_family, timeout):
         """Instructs all process_family children to stop"""
         logger.info("Sending stop signals to child processes")
-        process_family.send_stop_signal_to_all()
+        self.send_signal_to_all(process_family, process_family.CHILD_STOP_SIGNAL)
 
 CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy
 CHILD_COMMS_STRATEGY_PIPES_CLOSE = ClosePipesCommsStrategy
@@ -659,28 +681,6 @@ class ProcessFamily(object):
             else:
                 time.sleep(0.1)
 
-
-    def send_command_to_all(self, command, timeout=30, params=None):
-        start_time = time.time()
-        response_id = str(uuid.uuid4())
-        responses = [None]*len(self.child_processes)
-        try:
-            for p in self.child_processes:
-                p._send_command_req(response_id, command, params=params)
-
-            for i, p in enumerate(self.child_processes):
-                time_left = timeout - (time.time() - start_time)
-                responses[i] = p._wait_for_response(response_id, time_left)
-            return responses
-        finally:
-            for p in self.child_processes:
-                p._cleanup_queue(response_id)
-
-    def send_stop_signal_to_all(self):
-        signal_name = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}.get(self.CHILD_STOP_SIGNAL, str(self.CHILD_STOP_SIGNAL))
-        for p in list(self.child_processes):
-            logger.info("Sending signal %s to process %r", signal_name, p)
-            os.kill(p._process_instance.pid, self.CHILD_STOP_SIGNAL)
 
     def _find_module_filename(self, modulename):
         """finds the filename of the module with the given name (supports submodules)"""
