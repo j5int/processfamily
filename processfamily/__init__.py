@@ -284,55 +284,6 @@ class ChildCommsStrategy(object):
         yield
         yield
 
-    def _send_command_req(self, response_id, command, params=None):
-        with self._rsp_queues_lock:
-            if self._rsp_queues is None:
-                return
-            self._rsp_queues[response_id] = Queue.Queue()
-        cmd = {
-            "method": command,
-            "id": response_id,
-            "jsonrpc": "2.0"
-        }
-        if params is not None:
-            cmd["params"] = params
-
-        req = json.dumps(cmd)
-        if '\n' in req:
-            raise ValueError('Invalid request string (new lines are not allowed): "%r"' % req)
-
-        try:
-            with self._stdin_lock:
-                self._process_instance.stdin.write("%s\n" % req)
-                self._process_instance.stdin.flush()
-                if command == 'stop':
-                    #Now close the stream - we are done
-                    self._process_instance.stdin.close()
-        except Exception as e:
-            if self._process_instance.poll() is None:
-                #The process is running, so something is wrong:
-                raise
-
-    def _wait_for_response(self, response_id, timeout):
-        with self._rsp_queues_lock:
-            if self._rsp_queues is None:
-                return None
-            q = self._rsp_queues.get(response_id, None)
-        if q is None:
-            return None
-        try:
-            if timeout <= 0:
-                return q.get_nowait()
-            else:
-                return q.get(True, timeout)
-        except Queue.Empty as e:
-            return None
-
-    def _cleanup_queue(self, response_id):
-        with self._rsp_queues_lock:
-            if self._rsp_queues is not None:
-                self._rsp_queues.pop(response_id, None)
-
     def _sys_err_thread_target(self):
         while True:
             try:
@@ -458,6 +409,55 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
             yield self._wait_for_response(response_id, end_time - time.time())
         finally:
             self._cleanup_queue(response_id)
+
+    def _send_command_req(self, response_id, command, params=None):
+        with self._rsp_queues_lock:
+            if self._rsp_queues is None:
+                return
+            self._rsp_queues[response_id] = Queue.Queue()
+        cmd = {
+            "method": command,
+            "id": response_id,
+            "jsonrpc": "2.0"
+        }
+        if params is not None:
+            cmd["params"] = params
+
+        req = json.dumps(cmd)
+        if '\n' in req:
+            raise ValueError('Invalid request string (new lines are not allowed): "%r"' % req)
+
+        try:
+            with self._stdin_lock:
+                self._process_instance.stdin.write("%s\n" % req)
+                self._process_instance.stdin.flush()
+                if command == 'stop':
+                    #Now close the stream - we are done
+                    self._process_instance.stdin.close()
+        except Exception as e:
+            if self._process_instance.poll() is None:
+                #The process is running, so something is wrong:
+                raise
+
+    def _wait_for_response(self, response_id, timeout):
+        with self._rsp_queues_lock:
+            if self._rsp_queues is None:
+                return None
+            q = self._rsp_queues.get(response_id, None)
+        if q is None:
+            return None
+        try:
+            if timeout <= 0:
+                return q.get_nowait()
+            else:
+                return q.get(True, timeout)
+        except Queue.Empty as e:
+            return None
+
+    def _cleanup_queue(self, response_id):
+        with self._rsp_queues_lock:
+            if self._rsp_queues is not None:
+                self._rsp_queues.pop(response_id, None)
 
 
 class SignalStrategy(ChildCommsStrategy):
