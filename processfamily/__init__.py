@@ -236,9 +236,10 @@ class _ChildProcessProxy(object):
     """
 
     def __init__(self, process_instance, echo_std_err, child_index, process_family):
+        if type(self) in (_ChildProcessProxy, ChildCommsStrategy):
+            raise NotImplementedError("A concrete strategy needs to be chosen")
         self.process_family = process_family
         self.child_index = child_index
-        self.comms_strategy = process_family.CHILD_COMMS_STRATEGY(self)
         self.name = self.process_family.get_child_name(child_index)
         self._process_instance = process_instance
 
@@ -251,13 +252,13 @@ class _ChildProcessProxy(object):
             self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target, name="pf_%s_stderr" % self.name)
             self._sys_err_thread.daemon = True
             self._sys_err_thread.start()
-        if self.comms_strategy.MONITOR_STDOUT:
+        if self.MONITOR_STDOUT:
             self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target, name="pf_%s_stdout" % self.name)
             self._sys_out_thread.daemon = True
             self._sys_out_thread.start()
 
     def __repr__(self):
-        return "%s (%r)" % (self.name, self._process_instance)
+        return "%s (%s: %r)" % (self.name, type(self).__name__, self._process_instance)
 
     def _send_command_req(self, response_id, command, params=None):
         with self._rsp_queues_lock:
@@ -333,7 +334,7 @@ class _ChildProcessProxy(object):
                     if not line:
                         break
                     try:
-                        if self.comms_strategy.SENDS_STDOUT_RESPONSES:
+                        if self.SENDS_STDOUT_RESPONSES:
                             self._handle_response_line(line)
                         else:
                             self.process_family.handle_sys_out_line(line)
@@ -380,21 +381,10 @@ CPU_AFFINITY_STRATEGY_NONE = 0
 CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
 CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
 
-class ChildCommsStrategy(object):
+class ChildCommsStrategy(_ChildProcessProxy):
     MONITOR_STDOUT = True
     SENDS_STDOUT_RESPONSES = False
     CAN_WAIT_FOR_TERMINATE = True
-
-    def __init__(self, child_process):
-        if type(self) == ChildCommsStrategy:
-            raise NotImplementedError("A concrete strategy needs to be chosen")
-        self.child_process = child_process
-
-    def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, self.child_process)
-
-    def __eq__(self, other):
-        return type(self) == type(other)
 
     @staticmethod
     def get_popen_streams(echo_std_err):
@@ -429,8 +419,8 @@ class NoCommsStrategy(ChildCommsStrategy):
 
 class ClosePipesCommsStrategy(ChildCommsStrategy):
     def stop_child(self, end_time):
-        p = self.child_process._process_instance
-        logger.info("Closing stdin for process %r", self.child_process)
+        p = self._process_instance
+        logger.info("Closing stdin for process %r", self)
         try:
             p.stdin.close()
         except Exception as e:
@@ -447,39 +437,39 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
         the next after receiving a response, and stopping after cleanup"""
         response_id = str(uuid.uuid4())
         try:
-            yield self.child_process._send_command_req(response_id, "wait_for_start")
-            response = self.child_process._wait_for_response(response_id, end_time - time.time())
+            yield self._send_command_req(response_id, "wait_for_start")
+            response = self._wait_for_response(response_id, end_time - time.time())
             yield response
         finally:
-            self.child_process._cleanup_queue(response_id)
+            self._cleanup_queue(response_id)
         if response is None:
-            poll_result = self.child_process._process_instance.poll()
+            poll_result = self._process_instance.poll()
             if poll_result is None:
                 logger.error("Timed out waiting for %s (PID %d) to complete initialisation",
-                             self.child_process.name, self.child_process._process_instance.pid)
+                             self.name, self._process_instance.pid)
             else:
                 logger.error("%s terminated with response code %d before completing initialisation",
-                             self.child_process.name, poll_result)
+                             self.name, poll_result)
 
     def stop_child(self, end_time):
         """generator method to send stop to child, with the first yield after sending the shutdown command,
         the next after receiving a response, and stopping after cleanup"""
         response_id = str(uuid.uuid4())
         try:
-            yield self.child_process._send_command_req(response_id, "stop")
-            yield self.child_process._wait_for_response(response_id, end_time - time.time())
+            yield self._send_command_req(response_id, "stop")
+            yield self._wait_for_response(response_id, end_time - time.time())
         finally:
-            self.child_process._cleanup_queue(response_id)
+            self._cleanup_queue(response_id)
 
 
 class SignalStrategy(ChildCommsStrategy):
     def stop_child(self, end_time):
         """generator method to send stop to child, with the first yield after sending the shutdown command,
         the next after receiving a response, and stopping after cleanup"""
-        signum = self.child_process.process_family.CHILD_STOP_SIGNAL
+        signum = self.process_family.CHILD_STOP_SIGNAL
         signal_name = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}.get(signum, str(signum))
-        logger.info("Sending signal %s to process %r", signal_name, self.child_process)
-        os.kill(self.child_process._process_instance.pid, signum)
+        logger.info("Sending signal %s to process %r", signal_name, self)
+        os.kill(self._process_instance.pid, signum)
         yield
         yield
 
@@ -634,7 +624,7 @@ class ProcessFamily(object):
                     self.set_child_affinity_mask(p.pid, i)
                 except Exception as e:
                     logger.error("Unable to set affinity for %s process %d: %s", self.get_child_name(i), p.pid, e)
-            self.child_processes.append(_ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
+            self.child_processes.append(self.CHILD_COMMS_STRATEGY(p, self.ECHO_STD_ERR, i, self))
 
         if sys.platform.startswith('win') and self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
             logger.debug("Waiting for child stream duplication events")
@@ -650,7 +640,7 @@ class ProcessFamily(object):
         command_processes = []
         try:
             for child_process in self.child_processes:
-                command_processes.append(child_process.comms_strategy.monitor_child_startup(end_time))
+                command_processes.append(child_process.monitor_child_startup(end_time))
             for c in command_processes:
                 # ping the process
                 c.next()
@@ -676,7 +666,7 @@ class ProcessFamily(object):
         command_processes = []
         try:
             for child_process in self.child_processes:
-                command_processes.append(child_process.comms_strategy.stop_child(end_time))
+                command_processes.append(child_process.stop_child(end_time))
             for c in command_processes:
                 # ping the process
                 c.next()
