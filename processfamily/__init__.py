@@ -230,13 +230,16 @@ class _ChildProcessHost(object):
             logger.error("Error handling command string: %s\n%s", e, _traceback_str())
 
 
-class _ChildProcessProxy(object):
+class ChildCommsStrategy(object):
     """
     A proxy to the child process that can be used from the parent process
     """
+    MONITOR_STDOUT = True
+    SENDS_STDOUT_RESPONSES = False
+    CAN_WAIT_FOR_TERMINATE = True
 
     def __init__(self, process_instance, echo_std_err, child_index, process_family):
-        if type(self) in (_ChildProcessProxy, ChildCommsStrategy):
+        if type(self) == ChildCommsStrategy:
             raise NotImplementedError("A concrete strategy needs to be chosen")
         self.process_family = process_family
         self.child_index = child_index
@@ -259,6 +262,27 @@ class _ChildProcessProxy(object):
 
     def __repr__(self):
         return "%s (%s: %r)" % (self.name, type(self).__name__, self._process_instance)
+
+    @staticmethod
+    def get_popen_streams(echo_std_err):
+        """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
+        PIPE = subprocess.PIPE
+        streams = {"stdin": PIPE, "stdout": PIPE, "stderr": PIPE}
+        if echo_std_err:
+            streams["stderr"] = open(os.devnull, 'w')
+        return streams
+
+    def monitor_child_startup(self, end_time):
+        """generator method to monitor process startup, with the first yield after sending a ping,
+        the next after receiving a response, and stopping after cleanup"""
+        yield
+        yield
+
+    def stop_child(self, end_time):
+        """generator method to send stop to child, with the first yield after sending the shutdown command,
+        the next after receiving a response, and stopping after cleanup"""
+        yield
+        yield
 
     def _send_command_req(self, response_id, command, params=None):
         with self._rsp_queues_lock:
@@ -380,32 +404,6 @@ _global_process_job_handle = None
 CPU_AFFINITY_STRATEGY_NONE = 0
 CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
 CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
-
-class ChildCommsStrategy(_ChildProcessProxy):
-    MONITOR_STDOUT = True
-    SENDS_STDOUT_RESPONSES = False
-    CAN_WAIT_FOR_TERMINATE = True
-
-    @staticmethod
-    def get_popen_streams(echo_std_err):
-        """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
-        PIPE = subprocess.PIPE
-        streams = {"stdin": PIPE, "stdout": PIPE, "stderr": PIPE}
-        if echo_std_err:
-            streams["stderr"] = open(os.devnull, 'w')
-        return streams
-
-    def monitor_child_startup(self, end_time):
-        """generator method to monitor process startup, with the first yield after sending a ping,
-        the next after receiving a response, and stopping after cleanup"""
-        yield
-        yield
-
-    def stop_child(self, end_time):
-        """generator method to send stop to child, with the first yield after sending the shutdown command,
-        the next after receiving a response, and stopping after cleanup"""
-        yield
-        yield
 
 
 class NoCommsStrategy(ChildCommsStrategy):
