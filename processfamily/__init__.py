@@ -251,7 +251,7 @@ class _ChildProcessProxy(object):
             self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target, name="pf_%s_stderr" % self.name)
             self._sys_err_thread.daemon = True
             self._sys_err_thread.start()
-        if self.comms_strategy != NoCommsStrategy():
+        if self.comms_strategy.MONITOR_STDOUT:
             self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target, name="pf_%s_stdout" % self.name)
             self._sys_out_thread.daemon = True
             self._sys_out_thread.start()
@@ -378,6 +378,8 @@ CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
 CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
 
 class ChildCommsStrategy(object):
+    MONITOR_STDOUT = True
+
     def __init__(self):
         if type(self) == ChildCommsStrategy:
             raise NotImplementedError("A concrete strategy needs to be chosen")
@@ -411,6 +413,8 @@ class ChildCommsStrategy(object):
         """Instructs all process_family children to stop"""
 
 class NoCommsStrategy(ChildCommsStrategy):
+    MONITOR_STDOUT = False
+
     def can_wait_for_terminate(self):
         """True if this strategy supports waiting for child processes to terminate; False for NoCommsStrategy"""
         return False
