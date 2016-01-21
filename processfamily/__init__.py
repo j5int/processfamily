@@ -392,11 +392,12 @@ class ChildCommsStrategy(object):
     def __eq__(self, other):
         return type(self) == type(other)
 
-    def get_popen_streams(self, process_family):
+    @staticmethod
+    def get_popen_streams(echo_std_err):
         """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
         PIPE = subprocess.PIPE
         streams = {"stdin": PIPE, "stdout": PIPE, "stderr": PIPE}
-        if process_family.ECHO_STD_ERR:
+        if echo_std_err:
             streams["stderr"] = open(os.devnull, 'w')
         return streams
 
@@ -410,7 +411,8 @@ class NoCommsStrategy(ChildCommsStrategy):
     MONITOR_STDOUT = False
     CAN_WAIT_FOR_TERMINATE = False
 
-    def get_popen_streams(self, process_family):
+    @staticmethod
+    def get_popen_streams(echo_std_err):
         """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
         return {"stdin": None, "stdout": None, "stderr": None}
 
@@ -565,7 +567,7 @@ class ProcessFamily(object):
         logger.debug("Added to job object")
 
     def get_Popen_kwargs(self, i, **kwargs):
-        popen_streams = self.comms_strategy.get_popen_streams(self)
+        popen_streams = self.CHILD_COMMS_STRATEGY.get_popen_streams(self.ECHO_STD_ERR)
         kwargs.update(popen_streams)
         if sys.platform.startswith('win'):
             if self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
