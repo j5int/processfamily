@@ -36,10 +36,6 @@ class ProcessFamilyForTests(processfamily.ProcessFamily):
     WIN_PASS_HANDLES_OVER_COMMANDLINE = True
 
     def __init__(self, number_of_child_processes=None, run_as_script=True):
-        super(ProcessFamilyForTests, self).__init__(
-            child_process_module_name='processfamily.test.ChildProcess',
-            number_of_child_processes=number_of_child_processes,
-            run_as_script=run_as_script)
         self.override_command_line = None
         command_file = os.path.join(os.path.dirname(__file__), 'tmp', 'command.txt')
         if os.path.exists(command_file):
@@ -69,6 +65,10 @@ class ProcessFamilyForTests(processfamily.ProcessFamily):
                     self.override_command_line = ['cat']
             elif command == 'use_signal':
                 self.CHILD_COMMS_STRATEGY = processfamily.CHILD_COMMS_STRATEGY_SIGNAL
+        super(ProcessFamilyForTests, self).__init__(
+            child_process_module_name='processfamily.test.ChildProcess',
+            number_of_child_processes=number_of_child_processes,
+            run_as_script=run_as_script)
 
     def handle_sys_err_line(self, child_index, line):
         logging.info("SYSERR: %d: %s", child_index+1, line.strip())

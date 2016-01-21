@@ -238,7 +238,7 @@ class _ChildProcessProxy(object):
     def __init__(self, process_instance, echo_std_err, child_index, process_family):
         self.process_family = process_family
         self.child_index = child_index
-        self.comms_strategy = process_family.CHILD_COMMS_STRATEGY
+        self.comms_strategy = process_family.comms_strategy
         self.name = self.process_family.get_child_name(child_index)
         self._process_instance = process_instance
 
@@ -463,10 +463,10 @@ class SignalStrategy(ChildCommsStrategy):
         logger.info("Sending stop signals to child processes")
         process_family.send_stop_signal_to_all()
 
-CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy()
-CHILD_COMMS_STRATEGY_PIPES_CLOSE = ClosePipesCommsStrategy()
-CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL = ProcessFamilyRPCProtocolStrategy()
-CHILD_COMMS_STRATEGY_SIGNAL = SignalStrategy()
+CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy
+CHILD_COMMS_STRATEGY_PIPES_CLOSE = ClosePipesCommsStrategy
+CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL = ProcessFamilyRPCProtocolStrategy
+CHILD_COMMS_STRATEGY_SIGNAL = SignalStrategy
 
 class ProcessFamily(object):
     """
@@ -484,6 +484,7 @@ class ProcessFamily(object):
     CHILD_COMMS_STRATEGY = CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL
 
     def __init__(self, child_process_module_name=None, number_of_child_processes=None, run_as_script=True):
+        self.comms_strategy = self.CHILD_COMMS_STRATEGY()
         self.child_process_module_name = child_process_module_name
         self.run_as_script = run_as_script
 
@@ -547,7 +548,7 @@ class ProcessFamily(object):
         logger.debug("Added to job object")
 
     def get_Popen_kwargs(self, i, **kwargs):
-        popen_streams = self.CHILD_COMMS_STRATEGY.get_popen_streams(self)
+        popen_streams = self.comms_strategy.get_popen_streams(self)
         kwargs.update(popen_streams)
         if sys.platform.startswith('win'):
             if self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
@@ -619,14 +620,14 @@ class ProcessFamily(object):
             for c in self.child_processes:
                 c._process_instance.wait_for_child_stream_duplication_event(timeout=timeout-(time.time()-s)-3)
 
-        self.CHILD_COMMS_STRATEGY.wait_for_start(self, timeout - (time.time()-s))
-        logger.info("All child processes initialised with strategy %r", self.CHILD_COMMS_STRATEGY)
+        self.comms_strategy.wait_for_start(self, timeout - (time.time()-s))
+        logger.info("All child processes initialised with strategy %r", self.comms_strategy)
 
     def stop(self, timeout=30, wait=True):
         """Stops children. Returns the number that required termination (or None if wait=False)"""
         clean_timeout = timeout - 1
         start_time = time.time()
-        self.CHILD_COMMS_STRATEGY.send_stop(self, clean_timeout)
+        self.comms_strategy.send_stop(self, clean_timeout)
         if wait:
             remaining_time = timeout - (time.time() - start_time)
             return self.wait_for_stop_and_then_terminate(timeout=remaining_time)
@@ -635,7 +636,7 @@ class ProcessFamily(object):
         """Waits for children to stop, but terminates them if necessary. Returns the number terminated"""
         clean_timeout = timeout - 1
         start_time = time.time()
-        if self.CHILD_COMMS_STRATEGY.can_wait_for_terminate():
+        if self.comms_strategy.can_wait_for_terminate():
             logger.debug("Waiting for child processes to terminate")
             self._wait_for_children_to_terminate(start_time, clean_timeout)
 
