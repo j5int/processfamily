@@ -413,37 +413,6 @@ class ChildCommsStrategy(object):
         yield
         yield
 
-    def wait_for_start(self, process_family, timeout):
-        """Waits (a maximum of timeout) until all children of process_family have started"""
-        end_time = time.time() + timeout
-        command_processes = []
-        try:
-            for p in process_family.child_processes:
-                command_processes.append(self.monitor_child_startup(p, end_time))
-            for c in command_processes:
-                # ping the process
-                c.next()
-            # results
-            return [c.next() for c in command_processes]
-        finally:
-            for c in command_processes:
-                c.close()
-
-    def send_stop(self, process_family, timeout):
-        """Instructs all process_family children to stop"""
-        end_time = time.time() + timeout
-        command_processes = []
-        try:
-            for p in process_family.child_processes:
-                command_processes.append(self.stop_child(p, end_time))
-            for c in command_processes:
-                # ping the process
-                c.next()
-            # results
-            return [c.next() for c in command_processes]
-        finally:
-            for c in command_processes:
-                c.close()
 
 class NoCommsStrategy(ChildCommsStrategy):
     MONITOR_STDOUT = False
@@ -669,17 +638,50 @@ class ProcessFamily(object):
             for c in self.child_processes:
                 c._process_instance.wait_for_child_stream_duplication_event(timeout=timeout-(time.time()-s)-3)
 
-        self.comms_strategy.wait_for_start(self, timeout - (time.time()-s))
+        self.wait_for_start(timeout - (time.time()-s))
         logger.info("All child processes initialised with strategy %r", self.comms_strategy)
+
+    def wait_for_start(self, timeout):
+        """Waits (a maximum of timeout) until all children of process_family have started"""
+        end_time = time.time() + timeout
+        command_processes = []
+        try:
+            for p in self.child_processes:
+                command_processes.append(self.comms_strategy.monitor_child_startup(p, end_time))
+            for c in command_processes:
+                # ping the process
+                c.next()
+            # results
+            return [c.next() for c in command_processes]
+        finally:
+            for c in command_processes:
+                c.close()
+
 
     def stop(self, timeout=30, wait=True):
         """Stops children. Returns the number that required termination (or None if wait=False)"""
         clean_timeout = timeout - 1
         start_time = time.time()
-        self.comms_strategy.send_stop(self, clean_timeout)
+        self.send_stop(clean_timeout)
         if wait:
             remaining_time = timeout - (time.time() - start_time)
             return self.wait_for_stop_and_then_terminate(timeout=remaining_time)
+
+    def send_stop(self, timeout):
+        """Instructs all process_family children to stop"""
+        end_time = time.time() + timeout
+        command_processes = []
+        try:
+            for p in self.child_processes:
+                command_processes.append(self.comms_strategy.stop_child(p, end_time))
+            for c in command_processes:
+                # ping the process
+                c.next()
+            # results
+            return [c.next() for c in command_processes]
+        finally:
+            for c in command_processes:
+                c.close()
 
     def wait_for_stop_and_then_terminate(self, timeout=30):
         """Waits for children to stop, but terminates them if necessary. Returns the number terminated"""
