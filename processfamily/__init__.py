@@ -483,6 +483,8 @@ class SignalStrategy(ChildCommsStrategy):
 
 class ForkingChildSignalStrategy(SignalStrategy):
     # requires the process_family instance to have a pid_file attribute added...
+    MONITOR_STDOUT = False
+
     @property
     def pid(self):
         return getattr(self, "forked_pid", None) or self._process_instance.pid
