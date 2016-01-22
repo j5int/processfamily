@@ -16,7 +16,7 @@ import jsonrpc
 import Queue
 import pkgutil
 from processfamily.threads import stop_threads
-from processfamily.processes import kill_process, set_processor_affinity, cpu_count
+from processfamily.processes import kill_process, process_exists, set_processor_affinity, cpu_count
 import signal
 import functools
 
@@ -269,6 +269,10 @@ class ChildCommsStrategy(object):
     def pid(self):
         return self._process_instance.pid
 
+    def is_stopped(self):
+        """return whether the governed process has stopped"""
+        return self._process_instance.poll() is not None
+
     @staticmethod
     def get_popen_streams(echo_std_err):
         """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
@@ -476,6 +480,34 @@ class SignalStrategy(ChildCommsStrategy):
         os.kill(self.pid, signum)
         yield
         yield
+
+class ForkingChildSignalStrategy(SignalStrategy):
+    # requires the process_family instance to have a pid_file attribute added...
+    @property
+    def pid(self):
+        return getattr(self, "forked_pid", None) or self._process_instance.pid
+
+    def is_stopped(self):
+        return process_exists(self.pid)
+
+    def monitor_child_startup(self, end_time):
+        """generator method to monitor process startup, with the first yield after sending a ping,
+        the next after receiving a response, and stopping after cleanup"""
+        while self._process_instance.poll() is None and time.time() < end_time:
+            # Python 2.7 has the timeout parameter for wait, but it is not documented
+            # try:
+            #     subprocess.Popen().wait(end_time - time.time())
+            # except Exception, e:
+            #     pass
+            time.sleep(0.05)
+        yield
+        with open(self.process_family.pid_file, 'rb') as f:
+            pid_str = f.read().strip()
+            self.forked_pid = int(pid_str) if pid_str and pid_str.isdigit() else None
+            if not self.forked_pid:
+                logger.error("Unexpected pid found in file %s for %r: %r", self.process_family.pid_file, self, pid_str)
+            yield
+
 
 CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy
 CHILD_COMMS_STRATEGY_PIPES_CLOSE = ClosePipesCommsStrategy
@@ -705,7 +737,7 @@ class ProcessFamily(object):
         first_run = True
         while self.child_processes and (first_run or time.time() - start_time < timeout):
             for p in list(self.child_processes):
-                if p._process_instance.poll() is not None:
+                if p.is_stopped():
                     self.child_processes.remove(p)
             if first_run:
                 first_run = False
