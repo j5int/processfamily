@@ -29,6 +29,8 @@ if sys.platform.startswith('win'):
 else:
     import prctl
 
+SIGNAL_NAMES = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}
+
 logger = logging.getLogger("processfamily")
 
 def start_child_process(child_process_instance):
@@ -465,7 +467,7 @@ class SignalStrategy(ChildCommsStrategy):
         """generator method to send stop to child, with the first yield after sending the shutdown command,
         the next after receiving a response, and stopping after cleanup"""
         signum = self.process_family.CHILD_STOP_SIGNAL
-        signal_name = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}.get(signum, str(signum))
+        signal_name = SIGNAL_NAMES.get(signum, str(signum))
         logger.info("Sending signal %s to process %r", signal_name, self)
         os.kill(self._process_instance.pid, signum)
         yield
