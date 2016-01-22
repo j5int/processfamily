@@ -265,6 +265,10 @@ class ChildCommsStrategy(object):
     def __repr__(self):
         return "%s (%s: %r)" % (self.name, type(self).__name__, self._process_instance)
 
+    @property
+    def pid(self):
+        return self._process_instance.pid
+
     @staticmethod
     def get_popen_streams(echo_std_err):
         """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
@@ -329,7 +333,7 @@ class ChildCommsStrategy(object):
             if self.echo_std_err:
                 self._sys_err_thread.join(5)
             if self._process_instance.poll() is None:
-                logger.error("Stdout stream closed for %s, but process is not terminated (PID:%s)", self.name, self._process_instance.pid)
+                logger.error("Stdout stream closed for %s, but process is not terminated (PID:%s)", self.name, self.pid)
             else:
                 logger.info("%s terminated (return code: %d)", self.name, self._process_instance.returncode)
         finally:
@@ -375,7 +379,7 @@ class ClosePipesCommsStrategy(ChildCommsStrategy):
         try:
             p.stdin.close()
         except Exception as e:
-            logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p.pid, e, _traceback_str())
+            logger.warning("Failed to close child process input stream with PID %s: %s\n%s", self.pid, e, _traceback_str())
         yield
         yield
 
@@ -397,7 +401,7 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
             poll_result = self._process_instance.poll()
             if poll_result is None:
                 logger.error("Timed out waiting for %s (PID %d) to complete initialisation",
-                             self.name, self._process_instance.pid)
+                             self.name, self.pid)
             else:
                 logger.error("%s terminated with response code %d before completing initialisation",
                              self.name, poll_result)
@@ -469,7 +473,7 @@ class SignalStrategy(ChildCommsStrategy):
         signum = self.process_family.CHILD_STOP_SIGNAL
         signal_name = SIGNAL_NAMES.get(signum, str(signum))
         logger.info("Sending signal %s to process %r", signal_name, self)
-        os.kill(self._process_instance.pid, signum)
+        os.kill(self.pid, signum)
         yield
         yield
 
@@ -691,9 +695,9 @@ class ProcessFamily(object):
             for p in list(self.child_processes):
                 try:
                     num_terminated += 1
-                    kill_process(p._process_instance.pid)
+                    kill_process(p.pid)
                 except Exception as e:
-                    logger.warning("Failed to kill child process %s with PID %s: %s\n%s", p.name, p._process_instance.pid, e, _traceback_str())
+                    logger.warning("Failed to kill child process %s with PID %s: %s\n%s", p.name, p.pid, e, _traceback_str())
             self._wait_for_children_to_terminate(start_time, timeout)
         return num_terminated
 
