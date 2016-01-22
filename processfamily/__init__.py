@@ -729,7 +729,8 @@ class ProcessFamily(object):
             for p in list(self.child_processes):
                 try:
                     num_terminated += 1
-                    kill_process(p.pid)
+                    if process_exists(p.pid):
+                        kill_process(p.pid)
                 except Exception as e:
                     logger.warning("Failed to kill child process %s with PID %s: %s\n%s", p.name, p.pid, e, _traceback_str())
             self._wait_for_children_to_terminate(start_time, timeout)
