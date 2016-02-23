@@ -322,7 +322,7 @@ class ChildCommsStrategy(object):
                         if self.SENDS_STDOUT_RESPONSES:
                             self._handle_response_line(line)
                         else:
-                            self.process_family.handle_sys_out_line(line)
+                            self.process_family.handle_sys_out_line(self.child_index, line)
                     except Exception as e:
                         logger.error("Error handling %s stdout output: %s\n%s", self.name, e,  _traceback_str())
                 except Exception as e:
