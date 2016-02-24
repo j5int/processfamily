@@ -93,7 +93,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.assertFalse(processes_left_running, msg="There should have been no PIDs left running but there were: %s" % (', '.join([str(p) for p in processes_left_running])))
 
 
-    def start_up(self, test_command=None, wait_for_middle_child=True, wait_for_children=True):
+    def start_up(self, test_command=None, wait_for_middle_child=True, wait_for_children=True, parent_timeout=None):
         command_file = os.path.join(os.path.dirname(__file__), 'test', 'tmp', 'command.txt')
         if test_command:
             with open(command_file, "w") as f:
@@ -101,17 +101,16 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         elif os.path.exists(command_file):
             os.remove(command_file)
 
-        self.start_parent_process()
+        self.start_parent_process(timeout=parent_timeout)
         #Wait up to 15 secs for the all ports to be available (the parent might wait 10 for a middle child):
         start_time = time.time()
         still_waiting = True
+        ports_to_wait = range(4) if wait_for_children else [0]
+        if not wait_for_middle_child:
+            ports_to_wait.remove(2)
         while still_waiting and time.time() - start_time < 15:
             still_waiting = False
-            for i in range(4):
-                if i > 0 and not wait_for_children:
-                    continue
-                if i == 2 and not wait_for_middle_child:
-                    continue
+            for i in ports_to_wait:
                 try:
                     s = socket.socket()
                     try:
@@ -151,9 +150,17 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                 pid = f.read().strip()
             kill_process(int(pid))
 
+    def check_stop(self, force_kills=0, timeout=None):
+        """Checks that a stop succeeds, and that the number of child processes that had to be terminated is as expected"""
+        params = {"timeout": str(timeout)} if timeout else {}
+        child_processes_terminated = self.send_parent_http_command("stop", params=params)
+        if child_processes_terminated != str(force_kills):
+            raise ValueError("Stop received, but parent reports %r instead of %r child processes terminated",
+                             child_processes_terminated, force_kills)
+
     def test_parent_stop(self):
         self.start_up()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_parent_exit(self):
         self.start_up()
@@ -176,7 +183,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def test_parent_stop_child_locked_up(self):
         self.start_up()
         self.freeze_up_middle_child()
-        self.send_parent_http_command("stop")
+        self.check_stop(1, timeout=5)
         #This needs time to wait for the child for 10 seconds:
         self.wait_for_parent_to_stop(11)
 
@@ -212,32 +219,31 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def test_child_exit_on_start(self):
         self.start_up(test_command='child_exit_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_error_during_run(self):
         self.start_up(test_command='child_error_during_run', wait_for_middle_child=False)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_freeze_on_start(self):
-        self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False)
+        self.start_up(test_command='child_freeze_on_start', wait_for_middle_child=False, parent_timeout=2)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
-        self.wait_for_parent_to_stop(11)
+        self.check_stop(1, timeout=5)
 
     def test_child_error_on_start(self):
         self.start_up(test_command='child_error_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_error_during_init(self):
         self.start_up(test_command='child_error_during_init', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_freeze_during_init(self):
-        self.start_up(test_command='child_freeze_during_init', wait_for_middle_child=False)
+        self.start_up(test_command='child_freeze_during_init', wait_for_middle_child=False, parent_timeout=2)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop(1, timeout=5)
         self.wait_for_parent_to_stop(11)
 
     def test_child_crash_on_start(self):
@@ -245,7 +251,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
             self.skipTest(self.skip_crash_test)
         self.start_up(test_command='child_crash_on_start', wait_for_middle_child=False)
         self.assert_middle_child_port_unbound()
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     if not sys.platform.startswith('win'):
         def test_sigint(self):
@@ -263,17 +269,17 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up()
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("OK", result, "Command to close file and delete it failed (got response: %s)" % result)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_echo_std_err_on(self):
         self.start_up(test_command='echo_std_err')
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_handles_over_commandline_off(self):
         if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
             self.skipTest("This test is not supported on this platform")
         self.start_up(test_command='handles_over_commandline_off')
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_handles_over_commandline_off_close_fds_off(self):
         if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
@@ -281,7 +287,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up(test_command='handles_over_commandline_off_close_fds_off')
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("FAIL", result, "Command to close file and delete it did not fail (got response: %s)" % result)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_close_fds_off(self):
         self.start_up(test_command='close_fds_off')
@@ -292,23 +298,31 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         else:
             #TODO: a relevant test on linux?
             pass
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_comms_strategy_stdin_close(self):
         self.start_up(test_command='use_cat', wait_for_children=False)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_child_comms_strategy_none(self):
         self.start_up(test_command='use_cat_comms_none', wait_for_children=False)
-        self.send_parent_http_command("stop")
+        # we don't actually have the ability to tell these children to stop
+        self.check_stop(3)
+
+    def test_child_comms_strategy_signal(self):
+        self.start_up(test_command='use_signal', wait_for_children=False)
+        # since we're not waiting for the children to start up, give them a chance to register signal handlers
+        time.sleep(0.5)
+        self.check_stop()
 
     def test_use_job_object_off(self):
-        self.start_up(test_command='use_job_object_off')
-        self.send_parent_http_command("stop")
+        self.start_up(test_command=
+                      'use_job_object_off')
+        self.check_stop()
 
     def test_cpu_affinity_off(self):
         self.start_up(test_command='cpu_affinity_off')
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def test_handles_over_commandline_off_file_open_by_parent(self):
         if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:
@@ -316,17 +330,17 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         self.start_up(test_command='handles_over_commandline_off')
         result = self.send_parent_http_command("close_file_and_delete_it")
         self.assertEqual("OK", result, "Command to close file and delete it failed (got response: %s)" % result)
-        self.send_parent_http_command("stop")
+        self.check_stop()
 
     def freeze_up_middle_child(self):
         #First check that we can do this fast (i.e. things aren't stuttering because of environment):
         for i in range(5):
-            self.send_middle_child_http_command("", timeout=4)
-        self.send_middle_child_http_command("hold_gil_%d" % (60*10)) #Freeze up for 10 minutes
+            self.send_middle_child_http_command("", timeout=1)
+        self.send_middle_child_http_command("hold_gil?t=%d" % (60*10)) #Freeze up for 10 minutes
         while True:
-            #Try and do this request until it takes longer than 4 secs - this would mean that we have successfully got stuck
+            #Try and do this request until it takes longer than 1 sec - this would mean that we have successfully got stuck
             try:
-                self.send_middle_child_http_command("", timeout=4)
+                self.send_middle_child_http_command("", timeout=1)
             except requests.exceptions.Timeout as t:
                 break
 
@@ -352,14 +366,14 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
     def get_path_to_ParentProcessPy(self):
         return os.path.join(os.path.dirname(__file__), 'test', 'ParentProcess.py')
 
-    def send_parent_http_command(self, command, **kwargs):
-        return self.send_http_command(Config.get_starting_port_nr(), command, **kwargs)
+    def send_parent_http_command(self, command, params=None, **kwargs):
+        return self.send_http_command(Config.get_starting_port_nr(), command, params=params, **kwargs)
 
-    def send_middle_child_http_command(self, command, **kwargs):
-        return self.send_http_command(Config.get_starting_port_nr()+2, command, **kwargs)
+    def send_middle_child_http_command(self, command, params=None, **kwargs):
+        return self.send_http_command(Config.get_starting_port_nr()+2, command, params=params, **kwargs)
 
-    def send_http_command(self, port, command, **kwargs):
-        r = requests.get('http://localhost:%d/%s' % (port, command), **kwargs)
+    def send_http_command(self, port, command, params=None, **kwargs):
+        r = requests.get('http://localhost:%d/%s' % (port, command), params=params, **kwargs)
         j = r.json
         if callable(j):
             return j()
@@ -376,19 +390,24 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         while time.time()-start_time < timeout:
             if process.poll() is None:
                 time.sleep(0.3)
+            else:
+                return
 
 
 class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
 
     skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
-    def start_parent_process(self):
+    def start_parent_process(self, timeout=None):
         kwargs={}
         if sys.platform.startswith('win'):
             kwargs['creationflags'] = CREATE_BREAKAWAY_FROM_JOB
+        environ = os.environ.copy()
+        if timeout:
+            environ["STARTUP_TIMEOUT"] = str(timeout)
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
-            close_fds=True, **kwargs)
+            close_fds=True, env=environ, **kwargs)
         threading.Thread(target=self.parent_process.communicate).start()
 
     def wait_for_parent_to_stop(self, timeout):

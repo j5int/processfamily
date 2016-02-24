@@ -31,6 +31,7 @@ if __name__ == '__main__':
 
 from processfamily import ChildProcess, start_child_process
 import logging
+import signal
 from processfamily.test.FunkyWebServer import FunkyWebServer, hold_gil
 if sys.platform.startswith('win'):
     from processfamily.win32Popen import open_commandline_passed_stdio_streams
@@ -47,6 +48,12 @@ class ChildProcessForTests(ChildProcess):
             FunkyWebServer.parse_args_and_setup_logging()
             hold_gil(10*60)
         self.server = FunkyWebServer()
+        signal.signal(signal.SIGINT, self.signal_handler)
+
+    def signal_handler(self, signum, frame):
+        if signum == signal.SIGINT:
+            logging.info("Stopping server - process %d", os.getpid())
+            self.server.stop()
 
     def run(self):
         if test_command == 'child_error_during_run':

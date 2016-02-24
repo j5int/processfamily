@@ -16,7 +16,7 @@ import jsonrpc
 import Queue
 import pkgutil
 from processfamily.threads import stop_threads
-from processfamily.processes import kill_process, set_processor_affinity, cpu_count
+from processfamily.processes import kill_process, process_exists, set_processor_affinity, cpu_count
 import signal
 import functools
 
@@ -28,6 +28,8 @@ if sys.platform.startswith('win'):
     from processfamily import win32Popen
 else:
     import prctl
+
+SIGNAL_NAMES = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}
 
 logger = logging.getLogger("processfamily")
 
@@ -102,8 +104,8 @@ class _ChildProcessHost(object):
         sys.stdout = open(os.devnull, 'w')
 
         self._stdout_lock = threading.RLock()
-        self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target)
-        self._sys_in_thread.setDaemon(True)
+        self._sys_in_thread = threading.Thread(target=self._sys_in_thread_target, name="pf_%s_stdin" % repr(child_process))
+        self._sys_in_thread.daemon = True
         self._should_stop = False
 
     def run(self):
@@ -150,7 +152,9 @@ class _ChildProcessHost(object):
 
         self._should_stop = True
         self._started_event.wait(1)
-        threading.Thread(target=self._stop_thread_target).start()
+        stop_thread = threading.Thread(target=self._stop_thread_target, name="pf_%s_stop" % repr(self.child_process))
+        stop_thread.daemon = True
+        stop_thread.start()
         self._stopped_event.wait(3)
         #Give her ten seconds to stop
         #This will not actually stop the process from terminating as this is a daemon thread
@@ -228,15 +232,19 @@ class _ChildProcessHost(object):
             logger.error("Error handling command string: %s\n%s", e, _traceback_str())
 
 
-class _ChildProcessProxy(object):
+class ChildCommsStrategy(object):
     """
     A proxy to the child process that can be used from the parent process
     """
+    MONITOR_STDOUT = True
+    SENDS_STDOUT_RESPONSES = False
+    CAN_WAIT_FOR_TERMINATE = True
 
     def __init__(self, process_instance, echo_std_err, child_index, process_family):
+        if type(self) == ChildCommsStrategy:
+            raise NotImplementedError("A concrete strategy needs to be chosen")
         self.process_family = process_family
         self.child_index = child_index
-        self.comms_strategy = process_family.CHILD_COMMS_STRATEGY
         self.name = self.process_family.get_child_name(child_index)
         self._process_instance = process_instance
 
@@ -246,17 +254,169 @@ class _ChildProcessProxy(object):
 
         self.echo_std_err = echo_std_err
         if self.echo_std_err:
-            self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target)
+            self._sys_err_thread = threading.Thread(target=self._sys_err_thread_target, name="pf_%s_stderr" % self.name)
+            self._sys_err_thread.daemon = True
             self._sys_err_thread.start()
-        if self.comms_strategy:
-            self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target)
+        if self.MONITOR_STDOUT:
+            self._sys_out_thread = threading.Thread(target=self._sys_out_thread_target, name="pf_%s_stdout" % self.name)
+            self._sys_out_thread.daemon = True
             self._sys_out_thread.start()
 
-    def send_command(self, command, timeout, params=None):
+    def __repr__(self):
+        return "%s (%s: %r)" % (self.name, type(self).__name__, self._process_instance)
+
+    @property
+    def pid(self):
+        return self._process_instance.pid
+
+    def is_stopped(self):
+        """return whether the governed process has stopped"""
+        return self._process_instance.poll() is not None
+
+    @staticmethod
+    def get_popen_streams(echo_std_err):
+        """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
+        PIPE = subprocess.PIPE
+        streams = {"stdin": PIPE, "stdout": PIPE, "stderr": PIPE}
+        if not echo_std_err:
+            streams["stderr"] = open(os.devnull, 'w')
+        return streams
+
+    def monitor_child_startup(self, end_time):
+        """generator method to monitor process startup, with the first yield after sending a ping,
+        the next after receiving a response, and stopping after cleanup"""
+        yield
+        yield
+
+    def stop_child(self, end_time):
+        """generator method to send stop to child, with the first yield after sending the shutdown command,
+        the next after receiving a response, and stopping after cleanup"""
+        yield
+        yield
+
+    def _sys_err_thread_target(self):
+        while True:
+            try:
+                line = self._process_instance.stderr.readline()
+                if not line:
+                    break
+                try:
+                    self.process_family.handle_sys_err_line(self.child_index, line)
+                except Exception as e:
+                    logger.error("Error handling %s stderr output: %s\n%s", self.name, e,  _traceback_str())
+            except Exception as e:
+                logger.error("Exception reading stderr output for %s: %s\n%s", self.name, e,  _traceback_str())
+                # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
+                # so it might get in to a tight loop which I want to avoid
+                time.sleep(5)
+        logger.debug("Subprocess stderr closed")
+
+    def _sys_out_thread_target(self):
+        try:
+            while True:
+                try:
+                    line = self._process_instance.stdout.readline()
+                    if not line:
+                        break
+                    try:
+                        if self.SENDS_STDOUT_RESPONSES:
+                            self._handle_response_line(line)
+                        else:
+                            self.process_family.handle_sys_out_line(self.child_index, line)
+                    except Exception as e:
+                        logger.error("Error handling %s stdout output: %s\n%s", self.name, e,  _traceback_str())
+                except Exception as e:
+                    logger.error("Exception reading stdout output for %s: %s\n%s", self.name, e,  _traceback_str())
+                    # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
+                    # so it might get in to a tight loop which I want to avoid
+                    time.sleep(5)
+            logger.debug("Subprocess stdout closed - expecting termination")
+            start_time = time.time()
+            while self._process_instance.poll() is None and time.time() - start_time < 5:
+                time.sleep(0.1)
+            if self.echo_std_err:
+                self._sys_err_thread.join(5)
+            if self._process_instance.poll() is None:
+                logger.error("Stdout stream closed for %s, but process is not terminated (PID:%s)", self.name, self.pid)
+            else:
+                logger.info("%s terminated (return code: %d)", self.name, self._process_instance.returncode)
+        finally:
+            #Unstick any waiting command threads:
+            with self._rsp_queues_lock:
+                for q in self._rsp_queues.values():
+                    if q.empty():
+                        q.put_nowait(None)
+                self._rsp_queues = None
+
+    def _handle_response_line(self, line):
+        rsp = json.loads(line)
+        if "id" in rsp:
+            with self._rsp_queues_lock:
+                if self._rsp_queues is None:
+                    return
+                rsp_queue = self._rsp_queues.get(rsp["id"], None)
+            if rsp_queue is not None:
+                rsp_queue.put_nowait(rsp)
+
+#We need to keep the job handle in a global variable so that can't go out of scope and result in our process
+#being killed
+_global_process_job_handle = None
+
+CPU_AFFINITY_STRATEGY_NONE = 0
+CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
+CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
+
+
+class NoCommsStrategy(ChildCommsStrategy):
+    MONITOR_STDOUT = False
+    CAN_WAIT_FOR_TERMINATE = False
+
+    @staticmethod
+    def get_popen_streams(echo_std_err):
+        """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
+        return {"stdin": None, "stdout": None, "stderr": None}
+
+class ClosePipesCommsStrategy(ChildCommsStrategy):
+    def stop_child(self, end_time):
+        p = self._process_instance
+        logger.info("Closing stdin for process %r", self)
+        try:
+            p.stdin.close()
+        except Exception as e:
+            logger.warning("Failed to close child process input stream with PID %s: %s\n%s", self.pid, e, _traceback_str())
+        yield
+        yield
+
+
+class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
+    SENDS_STDOUT_RESPONSES = True
+
+    def monitor_child_startup(self, end_time):
+        """generator method to monitor process startup, with the first yield after sending a ping,
+        the next after receiving a response, and stopping after cleanup"""
         response_id = str(uuid.uuid4())
         try:
-            self._send_command_req(response_id, command, params=params)
-            return self._wait_for_response(response_id, timeout)
+            yield self._send_command_req(response_id, "wait_for_start")
+            response = self._wait_for_response(response_id, end_time - time.time())
+            yield response
+        finally:
+            self._cleanup_queue(response_id)
+        if response is None:
+            poll_result = self._process_instance.poll()
+            if poll_result is None:
+                logger.error("Timed out waiting for %s (PID %d) to complete initialisation",
+                             self.name, self.pid)
+            else:
+                logger.error("%s terminated with response code %d before completing initialisation",
+                             self.name, poll_result)
+
+    def stop_child(self, end_time):
+        """generator method to send stop to child, with the first yield after sending the shutdown command,
+        the next after receiving a response, and stopping after cleanup"""
+        response_id = str(uuid.uuid4())
+        try:
+            yield self._send_command_req(response_id, "stop")
+            yield self._wait_for_response(response_id, end_time - time.time())
         finally:
             self._cleanup_queue(response_id)
 
@@ -309,81 +469,52 @@ class _ChildProcessProxy(object):
             if self._rsp_queues is not None:
                 self._rsp_queues.pop(response_id, None)
 
-    def _sys_err_thread_target(self):
-        while True:
-            try:
-                line = self._process_instance.stderr.readline()
-                if not line:
-                    break
-                try:
-                    self.process_family.handle_sys_err_line(self.child_index, line)
-                except Exception as e:
-                    logger.error("Error handling %s stderr output: %s\n%s", self.name, e,  _traceback_str())
-            except Exception as e:
-                logger.error("Exception reading stderr output for %s: %s\n%s", self.name, e,  _traceback_str())
-                # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
-                # so it might get in to a tight loop which I want to avoid
-                time.sleep(5)
-        logger.debug("Subprocess stderr closed")
 
-    def _sys_out_thread_target(self):
-        try:
-            while True:
-                try:
-                    line = self._process_instance.stdout.readline()
-                    if not line:
-                        break
-                    try:
-                        if self.comms_strategy == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
-                            self._handle_response_line(line)
-                        else:
-                            self.process_family.handle_sys_out_line(line)
-                    except Exception as e:
-                        logger.error("Error handling %s stdout output: %s\n%s", self.name, e,  _traceback_str())
-                except Exception as e:
-                    logger.error("Exception reading stdout output for %s: %s\n%s", self.name, e,  _traceback_str())
-                    # This is a bit ugly, but I'm not sure what kind of error could cause this exception to occur,
-                    # so it might get in to a tight loop which I want to avoid
-                    time.sleep(5)
-            logger.debug("Subprocess stdout closed - expecting termination")
-            start_time = time.time()
-            while self._process_instance.poll() is None and time.time() - start_time < 5:
-                time.sleep(0.1)
-            if self.echo_std_err:
-                self._sys_err_thread.join(5)
-            if self._process_instance.poll() is None:
-                logger.error("Stdout stream closed for %s, but process is not terminated (PID:%s)", self.name, self._process_instance.pid)
-            else:
-                logger.info("%s terminated (return code: %d)", self.name, self._process_instance.returncode)
-        finally:
-            #Unstick any waiting command threads:
-            with self._rsp_queues_lock:
-                for q in self._rsp_queues.values():
-                    if q.empty():
-                        q.put_nowait(None)
-                self._rsp_queues = None
+class SignalStrategy(ChildCommsStrategy):
+    def stop_child(self, end_time):
+        """generator method to send stop to child, with the first yield after sending the shutdown command,
+        the next after receiving a response, and stopping after cleanup"""
+        signum = self.process_family.CHILD_STOP_SIGNAL
+        signal_name = SIGNAL_NAMES.get(signum, str(signum))
+        logger.info("Sending signal %s to process %r", signal_name, self)
+        os.kill(self.pid, signum)
+        yield
+        yield
 
-    def _handle_response_line(self, line):
-        rsp = json.loads(line)
-        if "id" in rsp:
-            with self._rsp_queues_lock:
-                if self._rsp_queues is None:
-                    return
-                rsp_queue = self._rsp_queues.get(rsp["id"], None)
-            if rsp_queue is not None:
-                rsp_queue.put_nowait(rsp)
+class ForkingChildSignalStrategy(SignalStrategy):
+    # requires the process_family instance to have a pid_file attribute added...
+    MONITOR_STDOUT = False
 
-#We need to keep the job handle in a global variable so that can't go out of scope and result in our process
-#being killed
-_global_process_job_handle = None
+    @property
+    def pid(self):
+        return getattr(self, "forked_pid", None) or self._process_instance.pid
 
-CPU_AFFINITY_STRATEGY_NONE = 0
-CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
-CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
+    def is_stopped(self):
+        return process_exists(self.pid)
 
-CHILD_COMMS_STRATEGY_NONE = 0
-CHILD_COMMS_STRATEGY_PIPES_CLOSE = 1
-CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL = 2
+    def monitor_child_startup(self, end_time):
+        """generator method to monitor process startup, with the first yield after sending a ping,
+        the next after receiving a response, and stopping after cleanup"""
+        while self._process_instance.poll() is None and time.time() < end_time:
+            # Python 2.7 has the timeout parameter for wait, but it is not documented
+            # try:
+            #     subprocess.Popen().wait(end_time - time.time())
+            # except Exception, e:
+            #     pass
+            time.sleep(0.05)
+        yield
+        with open(self.process_family.pid_file, 'rb') as f:
+            pid_str = f.read().strip()
+            self.forked_pid = int(pid_str) if pid_str and pid_str.isdigit() else None
+            if not self.forked_pid:
+                logger.error("Unexpected pid found in file %s for %r: %r", self.process_family.pid_file, self, pid_str)
+            yield
+
+
+CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy
+CHILD_COMMS_STRATEGY_PIPES_CLOSE = ClosePipesCommsStrategy
+CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL = ProcessFamilyRPCProtocolStrategy
+CHILD_COMMS_STRATEGY_SIGNAL = SignalStrategy
 
 class ProcessFamily(object):
     """
@@ -393,6 +524,7 @@ class ProcessFamily(object):
     ECHO_STD_ERR = False
     CPU_AFFINITY_STRATEGY = CPU_AFFINITY_STRATEGY_PARENT_INCLUDED
     CLOSE_FDS = True
+    CHILD_STOP_SIGNAL = signal.SIGINT
     WIN_PASS_HANDLES_OVER_COMMANDLINE = False
     WIN_USE_JOB_OBJECT = True
     LINUX_USE_PDEATHSIG = True
@@ -403,12 +535,14 @@ class ProcessFamily(object):
         self.child_process_module_name = child_process_module_name
         self.run_as_script = run_as_script
 
-        if self.CPU_AFFINITY_STRATEGY:
-            self.cpu_count = cpu_count()
-            if number_of_child_processes:
-                self.number_of_child_processes = number_of_child_processes
-            elif self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
+        self.cpu_count = cpu_count()
+        if number_of_child_processes:
+            self.number_of_child_processes = number_of_child_processes
+        else:
+            if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
                 self.number_of_child_processes = self.cpu_count-1
+            elif self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_CHILDREN_ONLY:
+                self.number_of_child_processes = self.cpu_count
             else:
                 self.number_of_child_processes = self.cpu_count
 
@@ -463,6 +597,8 @@ class ProcessFamily(object):
         logger.debug("Added to job object")
 
     def get_Popen_kwargs(self, i, **kwargs):
+        popen_streams = self.CHILD_COMMS_STRATEGY.get_popen_streams(self.ECHO_STD_ERR)
+        kwargs.update(popen_streams)
         if sys.platform.startswith('win'):
             if self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
                 kwargs['timeout_for_child_stream_duplication_event'] = None
@@ -519,103 +655,98 @@ class ProcessFamily(object):
             logger.info("Starting %s", self.get_child_name(i))
             cmd = self.get_child_process_cmd(i)
             logger.debug("Commandline for %s: %s", self.get_child_name(i), json.dumps(cmd))
-            p = self.get_Popen_class()(
-                    cmd,
-                    **self.get_Popen_kwargs(i,
-                        stdin=subprocess.PIPE if self.CHILD_COMMS_STRATEGY else None,
-                        stdout=subprocess.PIPE if self.CHILD_COMMS_STRATEGY else None,
-                        stderr=(subprocess.PIPE if self.ECHO_STD_ERR else open(os.devnull, 'w')) if self.CHILD_COMMS_STRATEGY else None,
-                        close_fds=self.CLOSE_FDS))
+            p = self.get_Popen_class()(cmd, **self.get_Popen_kwargs(i, close_fds=self.CLOSE_FDS))
 
             if self.CPU_AFFINITY_STRATEGY and p.poll() is None:
                 try:
                     self.set_child_affinity_mask(p.pid, i)
                 except Exception as e:
-                    logger.error("Unable to set affinity for process %d: %s", p.pid, e)
-            self.child_processes.append(_ChildProcessProxy(p, self.ECHO_STD_ERR, i, self))
+                    logger.error("Unable to set affinity for %s process %d: %s", self.get_child_name(i), p.pid, e)
+            self.child_processes.append(self.CHILD_COMMS_STRATEGY(p, self.ECHO_STD_ERR, i, self))
 
         if sys.platform.startswith('win') and self.WIN_PASS_HANDLES_OVER_COMMANDLINE:
             logger.debug("Waiting for child stream duplication events")
             for c in self.child_processes:
                 c._process_instance.wait_for_child_stream_duplication_event(timeout=timeout-(time.time()-s)-3)
 
-        if self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
-            logger.debug("Waiting for child start events")
-            responses = self.send_command_to_all("wait_for_start", timeout=timeout-(time.time()-s))
-            for i, r in enumerate(responses):
-                if r is None:
-                    if self.child_processes[i]._process_instance.poll() is None:
-                        logger.error(
-                            "Timed out waiting for %s (PID %d) to complete initialisation",
-                            self.get_child_name(i),
-                            self.child_processes[i]._process_instance.pid)
-                    else:
-                        logger.error(
-                            "%s terminated with response code %d before completing initialisation",
-                            self.get_child_name(i),
-                            self.child_processes[i]._process_instance.poll())
-        logger.info("All child processes initialised")
+        self.wait_for_start(timeout - (time.time()-s))
+        logger.info("All child processes initialised with strategy %s", self.CHILD_COMMS_STRATEGY.__name__)
+
+    def wait_for_start(self, timeout):
+        """Waits (a maximum of timeout) until all children of process_family have started"""
+        end_time = time.time() + timeout
+        command_processes = []
+        try:
+            for child_process in self.child_processes:
+                command_processes.append(child_process.monitor_child_startup(end_time))
+            for c in command_processes:
+                # ping the process
+                c.next()
+            # results
+            return [c.next() for c in command_processes]
+        finally:
+            for c in command_processes:
+                c.close()
+
 
     def stop(self, timeout=30, wait=True):
-        clean_timeout = timeout - 1
-        if self.CHILD_COMMS_STRATEGY:
-            if self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PROCESSFAMILY_RPC_PROTOCOL:
-                logger.info("Sending stop commands to child processes")
-                self.send_command_to_all("stop", timeout=clean_timeout)
-            elif self.CHILD_COMMS_STRATEGY == CHILD_COMMS_STRATEGY_PIPES_CLOSE:
-                logger.info("Closing input streams of child processes")
-                for p in list(self.child_processes):
-                    try:
-                        p._process_instance.stdin.close()
-                    except Exception as e:
-                        logger.warning("Failed to close child process input stream with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
-        if wait:
-            self.wait_for_stop_and_then_terminate()
-
-    def wait_for_stop_and_then_terminate(self, timeout=30):
+        """Stops children. Returns the number that required termination (or None if wait=False)"""
         clean_timeout = timeout - 1
         start_time = time.time()
-        if self.CHILD_COMMS_STRATEGY:
+        self.send_stop(clean_timeout)
+        if wait:
+            remaining_time = timeout - (time.time() - start_time)
+            return self.wait_for_stop_and_then_terminate(timeout=remaining_time)
+
+    def send_stop(self, timeout):
+        """Instructs all process_family children to stop"""
+        end_time = time.time() + timeout
+        command_processes = []
+        try:
+            for child_process in self.child_processes:
+                command_processes.append(child_process.stop_child(end_time))
+            for c in command_processes:
+                # ping the process
+                c.next()
+            # results
+            return [c.next() for c in command_processes]
+        finally:
+            for c in command_processes:
+                c.close()
+
+    def wait_for_stop_and_then_terminate(self, timeout=30):
+        """Waits for children to stop, but terminates them if necessary. Returns the number terminated"""
+        clean_timeout = timeout - 1
+        start_time = time.time()
+        if self.CHILD_COMMS_STRATEGY.CAN_WAIT_FOR_TERMINATE:
             logger.debug("Waiting for child processes to terminate")
             self._wait_for_children_to_terminate(start_time, clean_timeout)
 
+        num_terminated = 0
         if self.child_processes:
             #We've nearly run out of time - let's try and kill them:
             logger.info("Attempting to kill child processes")
             for p in list(self.child_processes):
                 try:
-                    kill_process(p._process_instance.pid)
+                    num_terminated += 1
+                    if process_exists(p.pid):
+                        kill_process(p.pid)
                 except Exception as e:
-                    logger.warning("Failed to kill child process with PID %s: %s\n%s", p._process_instance.pid, e, _traceback_str())
+                    logger.warning("Failed to kill child process %s with PID %s: %s\n%s", p.name, p.pid, e, _traceback_str())
             self._wait_for_children_to_terminate(start_time, timeout)
+        return num_terminated
 
     def _wait_for_children_to_terminate(self, start_time, timeout):
         first_run = True
         while self.child_processes and (first_run or time.time() - start_time < timeout):
             for p in list(self.child_processes):
-                if p._process_instance.poll() is not None:
+                if p.is_stopped():
                     self.child_processes.remove(p)
             if first_run:
                 first_run = False
             else:
                 time.sleep(0.1)
 
-
-    def send_command_to_all(self, command, timeout=30, params=None):
-        start_time = time.time()
-        response_id = str(uuid.uuid4())
-        responses = [None]*len(self.child_processes)
-        try:
-            for p in self.child_processes:
-                p._send_command_req(response_id, command, params=params)
-
-            for i, p in enumerate(self.child_processes):
-                time_left = timeout - (time.time() - start_time)
-                responses[i] = p._wait_for_response(response_id, time_left)
-            return responses
-        finally:
-            for p in self.child_processes:
-                p._cleanup_queue(response_id)
 
     def _find_module_filename(self, modulename):
         """finds the filename of the module with the given name (supports submodules)"""

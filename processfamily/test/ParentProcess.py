@@ -23,7 +23,7 @@ if __name__ == '__main__':
     with open(pid_filename, "w") as pid_f:
         pid_f.write("%s\n" % pid)
 
-from processfamily import ProcessFamily, _traceback_str, CHILD_COMMS_STRATEGY_PIPES_CLOSE, CHILD_COMMS_STRATEGY_NONE
+import processfamily
 from processfamily.test.FunkyWebServer import FunkyWebServer
 import logging
 from processfamily.threads import stop_threads
@@ -32,14 +32,10 @@ import threading
 if sys.platform.startswith('win'):
     from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO
 
-class ProcessFamilyForTests(ProcessFamily):
+class ProcessFamilyForTests(processfamily.ProcessFamily):
     WIN_PASS_HANDLES_OVER_COMMANDLINE = True
 
     def __init__(self, number_of_child_processes=None, run_as_script=True):
-        super(ProcessFamilyForTests, self).__init__(
-            child_process_module_name='processfamily.test.ChildProcess',
-            number_of_child_processes=number_of_child_processes,
-            run_as_script=run_as_script)
         self.override_command_line = None
         command_file = os.path.join(os.path.dirname(__file__), 'tmp', 'command.txt')
         if os.path.exists(command_file):
@@ -60,13 +56,19 @@ class ProcessFamilyForTests(ProcessFamily):
                 self.CPU_AFFINITY_STRATEGY = None
             elif command == 'use_cat' or command == 'use_cat_comms_none':
                 self.WIN_PASS_HANDLES_OVER_COMMANDLINE = False
-                self.CHILD_COMMS_STRATEGY = CHILD_COMMS_STRATEGY_PIPES_CLOSE if command == 'use_cat' else CHILD_COMMS_STRATEGY_NONE
+                self.CHILD_COMMS_STRATEGY = processfamily.CHILD_COMMS_STRATEGY_PIPES_CLOSE if command == 'use_cat' else processfamily.CHILD_COMMS_STRATEGY_NONE
                 if sys.platform.startswith('win'):
                     if not CAN_USE_EXTENDED_STARTUPINFO and command == 'use_cat':
                         self.CLOSE_FDS = False
                     self.override_command_line = [os.path.join(os.path.dirname(__file__), 'win32', 'cat.exe')]
                 else:
                     self.override_command_line = ['cat']
+            elif command == 'use_signal':
+                self.CHILD_COMMS_STRATEGY = processfamily.CHILD_COMMS_STRATEGY_SIGNAL
+        super(ProcessFamilyForTests, self).__init__(
+            child_process_module_name='processfamily.test.ChildProcess',
+            number_of_child_processes=number_of_child_processes,
+            run_as_script=run_as_script)
 
     def handle_sys_err_line(self, child_index, line):
         logging.info("SYSERR: %d: %s", child_index+1, line.strip())
@@ -79,15 +81,17 @@ class ProcessFamilyForTests(ProcessFamily):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
+    STARTUP_TIMEOUT = int(os.environ.get("STARTUP_TIMEOUT", "") or "10")
     logging.info("Starting")
     try:
         try:
             server = FunkyWebServer()
             server_thread = None
             family = ProcessFamilyForTests(number_of_child_processes=server.num_children)
+            server.family = family
             try:
                 try:
-                    family.start(timeout=10)
+                    family.start(timeout=STARTUP_TIMEOUT)
                     server_thread = threading.Thread(target=server.run)
                     server_thread.start()
                     while server_thread.isAlive():
@@ -95,13 +99,11 @@ if __name__ == '__main__':
                 except KeyboardInterrupt:
                     logging.info("Stopping...")
                     server.stop()
-                finally:
-                    family.stop(timeout=10)
             finally:
                 if server_thread and server_thread.isAlive():
                     server_thread.join(5)
         finally:
             stop_threads()
     except Exception as e:
-        logging.error("Error in process family test parent process: %s\n%s", e, _traceback_str())
+        logging.error("Error in process family test parent process: %s\n%s", e, processfamily._traceback_str())
     logging.info("Done")
