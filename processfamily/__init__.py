@@ -278,7 +278,7 @@ class ChildCommsStrategy(object):
         """Returns kwargs for stdin, stdout and stderr to pass to subprocess.Popen"""
         PIPE = subprocess.PIPE
         streams = {"stdin": PIPE, "stdout": PIPE, "stderr": PIPE}
-        if echo_std_err:
+        if not echo_std_err:
             streams["stderr"] = open(os.devnull, 'w')
         return streams
 
