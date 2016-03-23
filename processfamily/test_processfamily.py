@@ -423,7 +423,7 @@ if sys.platform.startswith('win'):
 
         skip_crash_test = "The crash test throws up a dialog in this context" if sys.platform.startswith('win') else None
 
-        def start_parent_process(self):
+        def start_parent_process(self, timeout=None):
 
             self.parent_process = subprocess.Popen(
                 [Config.pythonw_exe, self.get_path_to_ParentProcessPy()],
@@ -450,7 +450,7 @@ if sys.platform.startswith('win'):
         def try_and_stop_everything_for_tear_down(self):
             self.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
 
-        def start_parent_process(self):
+        def start_parent_process(self, timeout=None):
             win32serviceutil.StartService(Config.svc_name)
 
         def wait_for_parent_to_stop(self, timeout):

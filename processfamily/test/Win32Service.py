@@ -54,17 +54,14 @@ class ProcessFamilyTestService(win32serviceutil.ServiceFramework):
             self.server = FunkyWebServer()
             logging.info("Starting process family")
             family = ProcessFamilyForWin32ServiceTests(number_of_child_processes=self.server.num_children)
+            self.server.family = family
+            family.start(timeout=10)
+            servicemanager.LogInfoMsg("ProcessFamilyTest started")
             try:
-                family.start(timeout=10)
-                servicemanager.LogInfoMsg("ProcessFamilyTest started")
-                try:
-                    logging.info("Starting HTTP server")
-                    self.server.run()
-                except KeyboardInterrupt:
-                    logging.info("Stopping...")
-            finally:
-                logging.info("Stopping process family")
-                family.stop(timeout=10)
+                logging.info("Starting HTTP server")
+                self.server.run()
+            except KeyboardInterrupt:
+                logging.info("Stopping...")
         except Exception as e:
             logging.error("Error in windows service: %s\n%s", e, _traceback_str())
         finally:
