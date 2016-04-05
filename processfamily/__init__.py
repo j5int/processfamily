@@ -35,6 +35,12 @@ SIGNAL_NAMES = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG"
 
 logger = logging.getLogger("processfamily")
 
+class JobObjectAssignError(Exception):
+    def __init__(self, message, cause, already_in_job):
+        super(JobObjectAssignError, self).__init__(message)
+        self.cause = cause
+        self.already_in_job = already_in_job
+
 def start_child_process(child_process_instance):
     host = _ChildProcessHost(child_process_instance)
     host.run()
@@ -596,18 +602,21 @@ class ProcessFamily(object):
         win32job.SetInformationJobObject(_global_process_job_handle, win32job.JobObjectExtendedLimitInformation, extended_info)
         try:
             win32job.AssignProcessToJobObject(_global_process_job_handle, win32api.GetCurrentProcess())
-        except pywintypes.error as e:
+        except Exception as e:
             winv = sys.getwindowsversion()
             logger.error("Error raised during assignment of the current process to a new job object. " +\
                          "The process %s already in a job. " +\
-                         "The windows version is %d.%d.",
+                         "The windows version is %d.%d.\nError: %s",
                             "is" if already_in_job else "is not",
                             winv.major,
-                            winv.minor)
-            if e.winerror == winerror.ERROR_ACCESS_DENIED:
-                if already_in_job and not (winv.major >= 6 and winv.minor >= 2):
-                    raise ValueError("On Windows versions older than Windows 8 / Windows Server 2012, ProcessFamily relies on the parent process NOT being in a job already")
-            raise
+                            winv.minor,
+                            _exception_str())
+
+            if already_in_job and not (winv.major >= 6 and winv.minor >= 2):
+                raise JobObjectAssignError("On Windows versions older than Windows 8 / Windows Server 2012, ProcessFamily relies on the parent process NOT being in a job already", e, already_in_job)
+
+            raise JobObjectAssignError("Error raised during assignment of the current process to a new job object.", e, already_in_job)
+
 
         logger.debug("Added to job object")
 
