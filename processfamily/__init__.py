@@ -24,6 +24,8 @@ if sys.platform.startswith('win'):
     import win32job
     import win32api
     import win32security
+    import pywintypes
+    import winerror
 
     from processfamily import win32Popen
 else:
@@ -32,6 +34,12 @@ else:
 SIGNAL_NAMES = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}
 
 logger = logging.getLogger("processfamily")
+
+class JobObjectAssignError(Exception):
+    def __init__(self, message, cause, already_in_job):
+        super(JobObjectAssignError, self).__init__(message)
+        self.cause = cause
+        self.already_in_job = already_in_job
 
 def start_child_process(child_process_instance):
     host = _ChildProcessHost(child_process_instance)
@@ -582,8 +590,7 @@ class ProcessFamily(object):
             #This means that we are creating another process family - we'll all be in the same job
             return
 
-        if win32job.IsProcessInJob(win32api.GetCurrentProcess(), None):
-            raise ValueError("ProcessFamily relies on the parent process NOT being in a job already")
+        already_in_job = win32job.IsProcessInJob(win32api.GetCurrentProcess(), None)
 
         #Create a new job and put us in it before we create any children
         logger.debug("Creating job object and adding parent process to it")
@@ -593,7 +600,24 @@ class ProcessFamily(object):
         extended_info = win32job.QueryInformationJobObject(_global_process_job_handle, win32job.JobObjectExtendedLimitInformation)
         extended_info['BasicLimitInformation']['LimitFlags'] = win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         win32job.SetInformationJobObject(_global_process_job_handle, win32job.JobObjectExtendedLimitInformation, extended_info)
-        win32job.AssignProcessToJobObject(_global_process_job_handle, win32api.GetCurrentProcess())
+        try:
+            win32job.AssignProcessToJobObject(_global_process_job_handle, win32api.GetCurrentProcess())
+        except Exception as e:
+            winv = sys.getwindowsversion()
+            logger.error("Error raised during assignment of the current process to a new job object. " +\
+                         "The process %s already in a job. " +\
+                         "The windows version is %d.%d.\nError: %s",
+                            "is" if already_in_job else "is not",
+                            winv.major,
+                            winv.minor,
+                            _exception_str())
+
+            if already_in_job and not (winv.major >= 6 and winv.minor >= 2):
+                raise JobObjectAssignError("On Windows versions older than Windows 8 / Windows Server 2012, ProcessFamily relies on the parent process NOT being in a job already", e, already_in_job)
+
+            raise JobObjectAssignError("Error raised during assignment of the current process to a new job object.", e, already_in_job)
+
+
         logger.debug("Added to job object")
 
     def get_Popen_kwargs(self, i, **kwargs):
