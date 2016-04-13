@@ -498,7 +498,7 @@ class ForkingChildSignalStrategy(SignalStrategy):
         return getattr(self, "forked_pid", None) or self._process_instance.pid
 
     def is_stopped(self):
-        return process_exists(self.pid)
+        return not process_exists(self.pid)
 
     def monitor_child_startup(self, end_time):
         """generator method to monitor process startup, with the first yield after sending a ping,
