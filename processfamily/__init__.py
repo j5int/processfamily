@@ -728,7 +728,8 @@ class ProcessFamily(object):
         command_processes = []
         try:
             for child_process in self.child_processes:
-                command_processes.append(child_process.stop_child(end_time))
+                if not child_process.is_stopped():
+                    command_processes.append(child_process.stop_child(end_time))
             for c in command_processes:
                 # ping the process
                 c.next()
