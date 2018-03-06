@@ -484,8 +484,13 @@ class SignalStrategy(ChildCommsStrategy):
         the next after receiving a response, and stopping after cleanup"""
         signum = self.process_family.CHILD_STOP_SIGNAL
         signal_name = SIGNAL_NAMES.get(signum, str(signum))
-        logger.info("Sending signal %s to process %r", signal_name, self)
-        os.kill(self.pid, signum)
+        if self.process_family.CHILD_SIGNAL_GROUP:
+            pgid = os.getpgid(self.pid)
+            logger.info("Sending signal %s to process %r (group %s)", signal_name, self, pgid)
+            os.killpg(pgid, signum)
+        else:
+            logger.info("Sending signal %s to process %r", signal_name, self)
+            os.kill(self.pid, signum)
         yield
         yield
 
@@ -533,6 +538,7 @@ class ProcessFamily(object):
     CPU_AFFINITY_STRATEGY = CPU_AFFINITY_STRATEGY_PARENT_INCLUDED
     CLOSE_FDS = True
     CHILD_STOP_SIGNAL = signal.SIGINT
+    CHILD_SIGNAL_GROUP = False
     WIN_PASS_HANDLES_OVER_COMMANDLINE = False
     WIN_USE_JOB_OBJECT = True
     LINUX_USE_PDEATHSIG = True
