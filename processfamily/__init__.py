@@ -511,12 +511,17 @@ class ForkingChildSignalStrategy(SignalStrategy):
             #     pass
             time.sleep(0.05)
         yield
-        with open(self.process_family.pid_file, 'rb') as f:
-            pid_str = f.read().strip()
-            self.forked_pid = int(pid_str) if pid_str and pid_str.isdigit() else None
-            if not self.forked_pid:
-                logger.error("Unexpected pid found in file %s for %r: %r", self.process_family.pid_file, self, pid_str)
-            yield
+        if os.path.exists(self.process_family.pid_file):
+            with open(self.process_family.pid_file, 'rb') as f:
+                pid_str = f.read().strip()
+                self.forked_pid = int(pid_str) if pid_str and pid_str.isdigit() else None
+                if not self.forked_pid:
+                    logger.error("Unexpected pid found in file %s for %r: %r", self.process_family.pid_file, self, pid_str)
+                yield
+        else:
+            self.forked_pid = None
+            logger.error("PID file %s was not created: Child for %r probably failed to start", self.process_family.pid_file, self)
+            raise ValueError("Could not find child process for %s (probably failed to start)" % self.name)
 
 
 CHILD_COMMS_STRATEGY_NONE = NoCommsStrategy
