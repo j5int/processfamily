@@ -23,8 +23,7 @@ if sys.platform.startswith('win'):
     import win32job
     import win32api
 else:
-    import prctl
-
+    from .. import ctypes_prctl as prctl
 def crash():
     """
     crash the Python interpreter...
