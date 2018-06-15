@@ -29,7 +29,7 @@ if sys.platform.startswith('win'):
 
     from processfamily import win32Popen
 else:
-    import prctl
+    from . import ctypes_prctl as prctl
 
 SIGNAL_NAMES = {getattr(signal, k): k for k in dir(signal) if k.startswith("SIG")}
 
