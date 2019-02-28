@@ -13,7 +13,7 @@ import argparse
 import shlex
 import os
 import jsonrpc
-import Queue
+import queue
 import pkgutil
 from processfamily.threads import stop_threads
 from processfamily.processes import kill_process, process_exists, set_processor_affinity, cpu_count
@@ -432,7 +432,7 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
         with self._rsp_queues_lock:
             if self._rsp_queues is None:
                 return
-            self._rsp_queues[response_id] = Queue.Queue()
+            self._rsp_queues[response_id] = queue.Queue()
         cmd = {
             "method": command,
             "id": response_id,
@@ -469,7 +469,7 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
                 return q.get_nowait()
             else:
                 return q.get(True, timeout)
-        except Queue.Empty as e:
+        except queue.Empty as e:
             return None
 
     def _cleanup_queue(self, response_id):
