@@ -710,9 +710,9 @@ class ProcessFamily(object):
                 command_processes.append(child_process.monitor_child_startup(end_time))
             for c in command_processes:
                 # ping the process
-                c.next()
+                next(c)
             # results
-            return [c.next() for c in command_processes]
+            return [next(c) for c in command_processes]
         finally:
             for c in command_processes:
                 c.close()
@@ -737,9 +737,9 @@ class ProcessFamily(object):
                     command_processes.append(child_process.stop_child(end_time))
             for c in command_processes:
                 # ping the process
-                c.next()
+                next(c)
             # results
-            return [c.next() for c in command_processes]
+            return [next(c) for c in command_processes]
         finally:
             for c in command_processes:
                 c.close()
