@@ -97,7 +97,7 @@ def forceful_stop_thread(thread):
     if thread.isAlive():
         logger.warning("Stopping thread %s forcefully", thread.getName())
         try:
-            thread._Thread__stop()
+            thread.stop()
         except Exception as e:
             logger.warning("Error stopping thread %s: %s", thread.getName(), e)
     return not thread.isAlive()
