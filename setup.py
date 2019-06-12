@@ -7,7 +7,7 @@ import sys
 
 setup(
     name='processfamily',
-    version='0.7',
+    version='0.8',
     packages = find_packages(),
     license='Apache License, Version 2.0',
     description='A library for launching, maintaining, and terminating a family of long-lived python child processes on Windows and *nix.',
@@ -22,7 +22,6 @@ setup(
         'Intended Audience :: Developers',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2 :: Only',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     install_requires = ["json-rpc", "affinity"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else []),

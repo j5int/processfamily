@@ -13,7 +13,10 @@ import argparse
 import shlex
 import os
 import jsonrpc
-import Queue
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 import pkgutil
 from processfamily.threads import stop_threads
 from processfamily.processes import kill_process, process_exists, set_processor_affinity, cpu_count
@@ -432,7 +435,7 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
         with self._rsp_queues_lock:
             if self._rsp_queues is None:
                 return
-            self._rsp_queues[response_id] = Queue.Queue()
+            self._rsp_queues[response_id] = queue.Queue()
         cmd = {
             "method": command,
             "id": response_id,
@@ -469,7 +472,7 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
                 return q.get_nowait()
             else:
                 return q.get(True, timeout)
-        except Queue.Empty as e:
+        except queue.Empty as e:
             return None
 
     def _cleanup_queue(self, response_id):
@@ -710,9 +713,9 @@ class ProcessFamily(object):
                 command_processes.append(child_process.monitor_child_startup(end_time))
             for c in command_processes:
                 # ping the process
-                c.next()
+                next(c)
             # results
-            return [c.next() for c in command_processes]
+            return [next(c) for c in command_processes]
         finally:
             for c in command_processes:
                 c.close()
@@ -737,9 +740,9 @@ class ProcessFamily(object):
                     command_processes.append(child_process.stop_child(end_time))
             for c in command_processes:
                 # ping the process
-                c.next()
+                next(c)
             # results
-            return [c.next() for c in command_processes]
+            return [next(c) for c in command_processes]
         finally:
             for c in command_processes:
                 c.close()
