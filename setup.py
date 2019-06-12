@@ -22,7 +22,6 @@ setup(
         'Intended Audience :: Developers',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2 :: Only',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     install_requires = ["json-rpc", "affinity"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else []),
