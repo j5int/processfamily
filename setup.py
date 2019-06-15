@@ -12,6 +12,7 @@ setup(
     license='Apache License, Version 2.0',
     description='A library for launching, maintaining, and terminating a family of long-lived python child processes on Windows and *nix.',
     long_description=open('README.md').read(),
+    long_description_content_type="text/markdown",
     url='http://www.j5int.com/',
     author='j5 International',
     author_email='support@j5int.com',
