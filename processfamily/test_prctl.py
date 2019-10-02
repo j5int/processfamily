@@ -37,7 +37,7 @@ class TestCtypesPrctl(unittest.TestSuite):
         CHILD_SIGNAL = signal.SIGTERM
         KILL_PARENT_WITH_SIGNAL = signal.SIGTERM
         try:
-            args = [sys.executable, __file__, 'run_parent', self.prctl_module_name, tmpfile, str(CHILD_SIGNAL)]
+            args = [sys.executable, __file__, 'run_parent', self.prctl_module_name, tmpfile, str(int(CHILD_SIGNAL))]
             parent_pid = os.spawnv(os.P_NOWAIT, sys.executable, args)
             time.sleep(0.2)
             child_pid_line = buf.readline().decode('UTF-8').replace('\x00', '')
