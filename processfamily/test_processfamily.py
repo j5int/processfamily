@@ -105,7 +105,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         #Wait up to 15 secs for the all ports to be available (the parent might wait 10 for a middle child):
         start_time = time.time()
         still_waiting = True
-        ports_to_wait = range(4) if wait_for_children else [0]
+        ports_to_wait = list(range(4)) if wait_for_children else [0]
         if not wait_for_middle_child:
             ports_to_wait.remove(2)
         while still_waiting and time.time() - start_time < 15:
@@ -115,7 +115,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                     s = socket.socket()
                     try:
                         s.connect(("localhost", Config.get_starting_port_nr()+i))
-                    except socket.error, e:
+                    except socket.error as e:
                         still_waiting = True
                         break
                 finally:

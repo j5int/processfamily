@@ -46,7 +46,7 @@ def get_thread_id(thread):
     if hasattr(thread, "_thread_id"):
         return thread._thread_id
     # no, look for it in the _active dict
-    for tid, tobj in threading._active.items():
+    for tid, tobj in list(threading._active.items()):
         if tobj is thread:
             thread._thread_id = tid
             return tid
@@ -56,7 +56,7 @@ def find_thread_frames(loglevel=logging.INFO):
     """Generates (thread, leaf_frame) for current threads; thread will be None for the main thread and some other special threads"""
     leaf_frames = sys._current_frames()
     threads = dict((t.ident, t) for t in threading.enumerate())
-    for thread_id, frame in leaf_frames.items():
+    for thread_id, frame in list(leaf_frames.items()):
         if thread_id in threads:
             yield threads[thread_id], frame
         else:
@@ -72,7 +72,7 @@ def get_thread_callstr(thread):
             thread_name = thread_target.__name__
         else:
             thread_name = "%s.%s" % (thread.__class__.__module__, thread.__class__.__name__)
-        callargs = ", ".join([repr(arg) for arg in thread_args] + ["%s=%r" % (name, value) for name, value in thread_kwargs.items()])
+        callargs = ", ".join([repr(arg) for arg in thread_args] + ["%s=%r" % (name, value) for name, value in list(thread_kwargs.items())])
         return "%s was called with %s(%s)" % (thread.getName(), thread_name, callargs)
     except Exception as e:
         return "Could not calculate thread arguments for thread (error %s)" % e
@@ -124,7 +124,7 @@ def filter_threads(threads, current_thread=None, exclude_threads=None, exclude_t
     for exclude_thread in exclude_threads:
         if exclude_thread in remaining_threads:
             remaining_threads.remove(exclude_thread)
-    return filter(exclude_thread_fn, remaining_threads) if exclude_thread_fn else remaining_threads
+    return list(filter(exclude_thread_fn, remaining_threads)) if exclude_thread_fn else remaining_threads
 
 def log_thread_tracebacks(threads, stop_event=None, finished_event=None, loglevel=logging.INFO):
     """Logs tracebacks for the given threads"""
@@ -148,7 +148,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tra
     """enumerates remaining threads and stops them"""
     current_thread = threading.currentThread()
     def find_stop_threads():
-        return [t for t in filter_threads(threading._active.values(), current_thread, exclude_threads, exclude_thread_fn=exclude_thread_fn) if t.isAlive()]
+        return [t for t in filter_threads(list(threading._active.values()), current_thread, exclude_threads, exclude_thread_fn=exclude_thread_fn) if t.isAlive()]
     remaining_threads = find_stop_threads()
     threads_to_stop = []
     for thread in remaining_threads:

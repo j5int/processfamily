@@ -1,14 +1,14 @@
 __author__ = 'matth'
 
-import BaseHTTPServer
-import SocketServer
-import urlparse
+import http.server
+import socketserver
+import urllib.parse
 import argparse
 from processfamily.test import Config
 import logging
 import logging.handlers
 import threading
-import thread
+import _thread
 import os
 from types import CodeType
 import json
@@ -29,7 +29,7 @@ def crash():
     crash the Python interpreter...
     see https://wiki.python.org/moin/CrashingPython
     """
-    exec CodeType(0, 5, 8, 0, "hello moshe", (), (), (), "", "", 0, "")
+    exec(CodeType(0, 0, 5, 8, 0, b"hello moshe", (), (), (), "", "", 0, b""))
 
 if sys.platform.startswith('win'):
     #Using a PyDLL here instead of a WinDLL causes the GIL to be acquired:
@@ -53,15 +53,15 @@ else:
         _libc.sleep(timeout)
         logging.info("Released GIL")
 
-class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class MyHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
     funkyserver = None
     http_server = None
 
     def do_GET(self):
         """Serve a GET request."""
-        parsed_url = urlparse.urlparse(self.path)
-        params = urlparse.parse_qs(parsed_url.query)
+        parsed_url = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed_url.query)
         path = parsed_url.path
         if path.startswith('/stop'):
             # stop children before we return a response
@@ -79,7 +79,7 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             if path.startswith('/stop'):
                 self.funkyserver.stop()
             if path.startswith('/interrupt_main'):
-                thread.interrupt_main()
+                _thread.interrupt_main()
             if path.startswith('/exit'):
                 os._exit(1)
             if path.startswith('/hold_gil'):
@@ -157,10 +157,10 @@ class MyHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         logging.info("%s - - " + format, self.client_address[0], *args)
 
-class MyHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
+class MyHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     def __init__(self, port):
         MyHTTPRequestHandler.http_server = self
-        BaseHTTPServer.HTTPServer.__init__(self, ("", port), MyHTTPRequestHandler)
+        http.server.HTTPServer.__init__(self, ("", port), MyHTTPRequestHandler)
 
     def handle_error(self, request, client_address):
         logging.error('Exception happened during processing of request from %s:\n%s', client_address, _traceback_str())
@@ -222,7 +222,7 @@ class FunkyWebServer(object):
                     logging.info("Had to terminate %d child processes", terminated)
                 else:
                     logging.info("Didn't have to terminate child processes, they stopped gracefully")
-        except Exception, e:
+        except Exception as e:
             self.child_processes_terminated = e
             logging.error("Error terminating child processes: %r", e)
 

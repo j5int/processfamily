@@ -36,7 +36,7 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
 
     def __init__(self, args,  bufsize=0, stdin=None, stdout=None, stderr=None,
                  universal_newlines=False, close_fds=False, timeout_for_child_stream_duplication_event=30, **kwargs):
-        if not isinstance(bufsize, (int, long)):
+        if not isinstance(bufsize, int):
             raise TypeError("bufsize must be an integer")
 
         self.commandline_passed = {}
@@ -243,7 +243,7 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
 
         close_fds = self.__really_close_fds
 
-        if not isinstance(args, basestring):
+        if not isinstance(args, str):
             args = subprocess.list2cmdline(args)
 
         if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
