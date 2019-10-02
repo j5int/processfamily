@@ -155,8 +155,8 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         params = {"timeout": str(timeout)} if timeout else {}
         child_processes_terminated = self.send_parent_http_command("stop", params=params)
         if child_processes_terminated != str(force_kills):
-            raise ValueError("Stop received, but parent reports %r instead of %r child processes terminated",
-                             child_processes_terminated, force_kills)
+            raise ValueError("Stop received, but parent reports %r instead of %r child processes terminated" %
+                             (child_processes_terminated, force_kills))
 
     def test_parent_stop(self):
         self.start_up()
