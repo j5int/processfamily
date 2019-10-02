@@ -81,7 +81,7 @@ def try_signalling_child_on_death(prctl_module, buf, child_signal):
         got_signal = threading.Event()
         def handle_signal(signum, frame):
             buf.seek(50, os.SEEK_SET)
-            buf.write('%d\n' % signum)
+            buf.write(('%d\n' % signum).encode('UTF-8'))
             buf.flush()
             got_signal.set()
         signal.signal(child_signal, handle_signal)
@@ -90,7 +90,7 @@ def try_signalling_child_on_death(prctl_module, buf, child_signal):
             return
         sys.exit(5)
     else:
-        buf.write('%d\n' % child_pid)
+        buf.write(('%d\n' % child_pid).encode('UTF-8'))
         buf.flush()
         time.sleep(2)
         sys.exit(3)
