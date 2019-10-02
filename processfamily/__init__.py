@@ -450,7 +450,7 @@ class ProcessFamilyRPCProtocolStrategy(ChildCommsStrategy):
 
         try:
             with self._stdin_lock:
-                self._process_instance.stdin.write("%s\n" % req)
+                self._process_instance.stdin.write(b"%s\n" % req.encode('UTF-8'))
                 self._process_instance.stdin.flush()
                 if command == 'stop':
                     #Now close the stream - we are done
@@ -515,7 +515,7 @@ class ForkingChildSignalStrategy(SignalStrategy):
             time.sleep(0.05)
         yield
         if os.path.exists(self.process_family.pid_file):
-            with open(self.process_family.pid_file, 'rb') as f:
+            with open(self.process_family.pid_file, 'r', encoding='UTF-8') as f:
                 pid_str = f.read().strip()
                 self.forked_pid = int(pid_str) if pid_str and pid_str.isdigit() else None
                 if not self.forked_pid:

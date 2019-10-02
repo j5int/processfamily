@@ -28,7 +28,7 @@ class TestCtypesPrctl(unittest.TestSuite):
 
     def test_pdeathsig_works(self):
         fd, tmpfile = tempfile.mkstemp()
-        os.write(fd, '\x00' * mmap.PAGESIZE)
+        os.write(fd, b'\x00' * mmap.PAGESIZE)
         os.lseek(fd, 0, os.SEEK_SET)
         buf = mmap.mmap(fd, mmap.PAGESIZE, mmap.MAP_SHARED, mmap.PROT_READ)
         CHILD_SIGNAL = signal.SIGTERM
@@ -37,7 +37,7 @@ class TestCtypesPrctl(unittest.TestSuite):
             args = [sys.executable, __file__, 'run_parent', self.prctl_module_name, tmpfile, str(CHILD_SIGNAL)]
             parent_pid = os.spawnv(os.P_NOWAIT, sys.executable, args)
             time.sleep(0.2)
-            child_pid_line = buf.readline()
+            child_pid_line = buf.readline().decode('UTF-8').replace('\x00', '')
             child_pid = int(child_pid_line.strip())
             os.kill(parent_pid, KILL_PARENT_WITH_SIGNAL)
             _, exit_info = os.waitpid(parent_pid, 0)
@@ -46,7 +46,7 @@ class TestCtypesPrctl(unittest.TestSuite):
             assert received_signal == KILL_PARENT_WITH_SIGNAL
             time.sleep(0.2)
             buf.seek(50, os.SEEK_SET)
-            child_signal_line = buf.readline()
+            child_signal_line = buf.readline().decode('UTF-8').replace('\x00', '')
             child_signum = int(child_signal_line.strip())
             assert child_signum == CHILD_SIGNAL
         finally:
