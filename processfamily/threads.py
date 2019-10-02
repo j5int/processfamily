@@ -65,9 +65,9 @@ def find_thread_frames(loglevel=logging.INFO):
 def get_thread_callstr(thread):
     """returns a string indicating how the given thread was called"""
     try:
-        thread_args = thread._Thread__args
-        thread_kwargs = thread._Thread__kwargs
-        thread_target = thread._Thread__target
+        thread_args = thread._args
+        thread_kwargs = thread._kwargs
+        thread_target = thread._target
         if thread_target:
             thread_name = thread_target.__name__
         else:
