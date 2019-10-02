@@ -17,7 +17,7 @@ import threading
 import time
 import unittest
 
-class TestCtypesPrctl(unittest.TestSuite):
+class TestCtypesPrctl(unittest.TestCase):
     prctl_module = ctypes_prctl
     prctl_module_name = 'ctypes_prctl'
 
@@ -60,7 +60,8 @@ class TestCtypesPrctl(unittest.TestSuite):
     def test_name_consistent(self):
         # this doesn't actually check that the process name changes, just that the function seems to work consistently
         default = os.path.basename(sys.executable)
-        assert self.prctl_module.get_name() == default
+        name = self.prctl_module.get_name()
+        self.assertEquals(name, default)
         self.prctl_module.set_name(default+'-prctl')
         assert self.prctl_module.get_name() == default+'-prctl'
         self.prctl_module.set_name(default)
