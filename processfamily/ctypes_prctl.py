@@ -2,6 +2,7 @@
 
 from ctypes import CDLL, c_int, byref, create_string_buffer
 from ctypes.util import find_library
+import sys
 
 libc = CDLL(find_library('c'))
 
@@ -10,6 +11,9 @@ PR_GET_PDEATHSIG = 2
 
 PR_SET_NAME = 15
 PR_GET_NAME = 16
+
+ENCODING = sys.getfilesystemencoding()
+del sys
 
 def _prctl(option, arg2=0, arg3=0, arg4=0, arg5=0):
     """Calls the libc prctl function, with the given command option and arguments
@@ -30,10 +34,10 @@ def get_pdeathsig():
 
 def set_name(name):
     """Set the name of the calling thread. name can be up to 16 bytes long"""
-    return _prctl(PR_SET_NAME, create_string_buffer(name, 16))
+    return _prctl(PR_SET_NAME, create_string_buffer(name.encode(ENCODING), 16))
 
 def get_name():
     """Return the name of the calling thread"""
     result = create_string_buffer(16)
     _prctl(PR_GET_NAME, byref(result))
-    return result.value
+    return result.value.decode(ENCODING)
