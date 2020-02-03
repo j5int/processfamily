@@ -7,6 +7,7 @@ standard_library.install_aliases()
 from builtins import str
 from builtins import range
 from builtins import *
+from future.utils import text_to_native_str
 __author__ = 'matth'
 
 import unittest
@@ -23,6 +24,8 @@ from processfamily.processes import process_exists, kill_process, AccessDeniedEr
 from processfamily import _traceback_str
 import signal
 import threading
+
+from processfamily.env import get_env_dict
 
 if sys.platform.startswith('win'):
     from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO, CREATE_BREAKAWAY_FROM_JOB
@@ -411,9 +414,9 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
         kwargs={}
         if sys.platform.startswith('win'):
             kwargs['creationflags'] = CREATE_BREAKAWAY_FROM_JOB
-        environ = os.environ.copy()
+        environ = get_env_dict()
         if timeout:
-            environ["STARTUP_TIMEOUT"] = str(timeout)
+            environ[text_to_native_str("STARTUP_TIMEOUT")] = text_to_native_str(timeout)
         self.parent_process = subprocess.Popen(
             [sys.executable, self.get_path_to_ParentProcessPy()],
             close_fds=True, env=environ, **kwargs)

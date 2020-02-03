@@ -11,6 +11,9 @@ __author__ = 'matth'
 
 import os
 import sys
+
+from processfamily.env import get_env
+
 if __name__ == '__main__':
     #python issue 18298
     if sys.platform.startswith('win'):
@@ -89,7 +92,7 @@ class ProcessFamilyForTests(processfamily.ProcessFamily):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    STARTUP_TIMEOUT = int(os.environ.get("STARTUP_TIMEOUT", "") or "10")
+    STARTUP_TIMEOUT = int(get_env("STARTUP_TIMEOUT", "") or "10")
     logging.info("Starting")
     try:
         try:
