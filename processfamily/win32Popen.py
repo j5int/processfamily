@@ -1,3 +1,13 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from past.builtins import basestring
+from builtins import *
+from builtins import object
 __author__ = 'matth'
 
 from processfamily import _winprocess_ctypes
@@ -36,7 +46,7 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
 
     def __init__(self, args,  bufsize=0, stdin=None, stdout=None, stderr=None,
                  universal_newlines=False, close_fds=False, timeout_for_child_stream_duplication_event=30, **kwargs):
-        if not isinstance(bufsize, (int, long)):
+        if not isinstance(bufsize, (int, int)):
             raise TypeError("bufsize must be an integer")
 
         self.commandline_passed = {}

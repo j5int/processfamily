@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
 # Extends mozprocess with some code from winappdgb:
 # These parts are mostly from: http://winappdbg.sourceforge.net/
 #
@@ -31,6 +35,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
+from builtins import object
 from mozprocess.winprocess import *
 from ctypes import cast, pointer, c_size_t, c_ssize_t, byref
 import sys

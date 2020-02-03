@@ -1,4 +1,15 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import next
+from builtins import range
+from builtins import *
+from builtins import object
 __author__ = 'matth'
 
 import threading
@@ -16,7 +27,7 @@ import jsonrpc
 try:
     import queue
 except ImportError:
-    import Queue as queue
+    import queue as queue
 import pkgutil
 from processfamily.threads import stop_threads
 from processfamily.processes import kill_process, process_exists, set_processor_affinity, cpu_count
@@ -354,7 +365,7 @@ class ChildCommsStrategy(object):
         finally:
             #Unstick any waiting command threads:
             with self._rsp_queues_lock:
-                for q in self._rsp_queues.values():
+                for q in list(self._rsp_queues.values()):
                     if q.empty():
                         q.put_nowait(None)
                 self._rsp_queues = None

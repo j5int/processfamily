@@ -1,3 +1,12 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
 __author__ = 'matth'
 
 import unittest
@@ -105,7 +114,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         #Wait up to 15 secs for the all ports to be available (the parent might wait 10 for a middle child):
         start_time = time.time()
         still_waiting = True
-        ports_to_wait = range(4) if wait_for_children else [0]
+        ports_to_wait = list(range(4)) if wait_for_children else [0]
         if not wait_for_middle_child:
             ports_to_wait.remove(2)
         while still_waiting and time.time() - start_time < 15:
