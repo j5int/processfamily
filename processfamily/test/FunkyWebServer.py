@@ -29,7 +29,7 @@ def crash():
     crash the Python interpreter...
     see https://wiki.python.org/moin/CrashingPython
     """
-    exec CodeType(0, 5, 8, 0, "hello moshe", (), (), (), "", "", 0, "")
+    exec(CodeType(0, 5, 8, 0, "hello moshe", (), (), (), "", "", 0, ""))
 
 if sys.platform.startswith('win'):
     #Using a PyDLL here instead of a WinDLL causes the GIL to be acquired:
@@ -222,7 +222,7 @@ class FunkyWebServer(object):
                     logging.info("Had to terminate %d child processes", terminated)
                 else:
                     logging.info("Didn't have to terminate child processes, they stopped gracefully")
-        except Exception, e:
+        except Exception as e:
             self.child_processes_terminated = e
             logging.error("Error terminating child processes: %r", e)
 

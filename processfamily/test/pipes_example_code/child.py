@@ -1,3 +1,4 @@
+from __future__ import print_function
 __author__ = 'Administrator'
 
 import os
@@ -38,7 +39,7 @@ pipeoutfd = msvcrt.open_osfhandle(int(out_file_handle), os.O_WRONLY)
 # Read from pipe
 # Note:  Could be done with os.read/os.close directly, instead of os.fdopen
 pipein = os.fdopen(pipeinfd, 'r')
-print pipein.read()
+print(pipein.read())
 pipein.close()
 
 pipeout = os.fdopen(pipeoutfd, 'w')

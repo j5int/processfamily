@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-import ctypes_prctl
+from __future__ import absolute_import
+from . import ctypes_prctl
 try:
     import prctl
 except ImportError as prctl_import_error:
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     if sys.argv[1] == 'run_parent':
         prctl_module_name, tmpfile, child_signal = sys.argv[2], sys.argv[3], sys.argv[4]
         if prctl_module_name == 'ctypes_prctl':
-            import ctypes_prctl as prctl_module
+            from . import ctypes_prctl as prctl_module
         elif prctl_module_name == 'python-prctl':
             import prctl as prctl_module
         fd = os.open(tmpfile, os.O_RDWR)

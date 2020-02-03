@@ -115,7 +115,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                     s = socket.socket()
                     try:
                         s.connect(("localhost", Config.get_starting_port_nr()+i))
-                    except socket.error, e:
+                    except socket.error as e:
                         still_waiting = True
                         break
                 finally:

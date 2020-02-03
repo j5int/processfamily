@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import subprocess
 import msvcrt
@@ -22,7 +23,7 @@ pipefh.write("Hello from parent.")
 pipefh.close()
 
 pipein = os.fdopen(pipe2out, 'r')
-print pipein.read()
+print(pipein.read())
 pipein.close()
 
 # Wait for the child to finish
