@@ -25,7 +25,7 @@ from processfamily import _traceback_str
 import signal
 import threading
 
-from processfamily.env import get_env_dict
+from processfamily.futurecompat import get_env_dict, list_to_native_str
 
 if sys.platform.startswith('win'):
     from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO, CREATE_BREAKAWAY_FROM_JOB
@@ -418,7 +418,7 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
         if timeout:
             environ[text_to_native_str("STARTUP_TIMEOUT")] = text_to_native_str(timeout)
         self.parent_process = subprocess.Popen(
-            [sys.executable, self.get_path_to_ParentProcessPy()],
+            list_to_native_str([sys.executable, self.get_path_to_ParentProcessPy()]),
             close_fds=True, env=environ, **kwargs)
         threading.Thread(target=self.parent_process.communicate).start()
 
@@ -452,7 +452,8 @@ if sys.platform.startswith('win'):
         def setUpClass(cls, service_username=None):
             cls.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
             cls.service_exe = build_service_exe()
-            subprocess.check_call([cls.service_exe] + (["--username", service_username] if service_username else []) + ["install"])
+            cmd = [cls.service_exe] + (["--username", service_username] if service_username else []) + ["install"]
+            subprocess.check_call(list_to_native_str(cmd))
 
         @classmethod
         def tearDownClass(cls):

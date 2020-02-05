@@ -12,7 +12,7 @@ __author__ = 'matth'
 import os
 import sys
 
-from processfamily.env import get_env
+from processfamily.futurecompat import get_env
 
 if __name__ == '__main__':
     #python issue 18298

@@ -10,7 +10,7 @@ __author__ = 'matth'
 import os
 import sys
 
-from processfamily.env import get_env
+from processfamily.futurecompat import get_env
 
 pythonw_exe = os.path.join(sys.prefix, "pythonw.exe")
 svc_name = 'ProcessFamilyTest'
