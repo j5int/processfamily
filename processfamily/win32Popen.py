@@ -2,6 +2,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
+
+native_int = int
+
 from future import standard_library
 standard_library.install_aliases()
 from builtins import str
@@ -46,7 +49,7 @@ class HandlesOverCommandLinePopen(subprocess.Popen):
 
     def __init__(self, args,  bufsize=0, stdin=None, stdout=None, stderr=None,
                  universal_newlines=False, close_fds=False, timeout_for_child_stream_duplication_event=30, **kwargs):
-        if not isinstance(bufsize, (int, int)):
+        if not isinstance(bufsize, int):
             raise TypeError("bufsize must be an integer")
 
         self.commandline_passed = {}
@@ -278,7 +281,9 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
         if None not in (p2cread, c2pwrite, errwrite):
             if close_fds:
                 HandleArray = _winprocess_ctypes.HANDLE * 3
-                handles_to_inherit = HandleArray(int(p2cread), int(c2pwrite), int(errwrite))
+                # PY2COMPAT new_int doesn't seem to know how to convert file handles to int.
+                # So we use the "native_int" instead.
+                handles_to_inherit = HandleArray(native_int(p2cread), native_int(c2pwrite), native_int(errwrite))
 
                 attribute_list_data = (
                     (
@@ -289,9 +294,11 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
                 inherit_handles = 1
 
             startupinfo.dwFlags |= _winprocess_ctypes.STARTF_USESTDHANDLES
-            startupinfo.hStdInput = int(p2cread)
-            startupinfo.hStdOutput = int(c2pwrite)
-            startupinfo.hStdError = int(errwrite)
+            # PY2COMPAT new_int doesn't seem to know how to convert file handles to int.
+            # So we use the "native_int" instead.
+            startupinfo.hStdInput = native_int(p2cread)
+            startupinfo.hStdOutput = native_int(c2pwrite)
+            startupinfo.hStdError = native_int(errwrite)
 
         if _winprocess_ctypes.CAN_USE_EXTENDED_STARTUPINFO:
             attribute_list = _winprocess_ctypes.ProcThreadAttributeList(attribute_list_data)
