@@ -17,7 +17,7 @@ if __name__ != '__main__':
     with open(pid_filename, "w") as pid_f:
         pid_f.write("%s\n" % pid)
 
-from . import win32service
+import win32service
 import win32serviceutil
 import win32api
 import win32con
