@@ -120,7 +120,7 @@ def set_process_affinity(mask, pid=None):
     affinity.sched_setaffinity(pid, mask)
     current_mask = affinity.sched_getaffinity(pid)
     current_mask_str = ", ".join(str(i) for i in current_mask)
-    if set(current_mask) != set(mask):
+    if current_mask != set(mask):
         request_mask_str = ", ".join(str(i) for i in mask)
         logger.warning("Set process affinity for pid %d to cores %s unsuccessful: actually set to %s", pid, request_mask_str, current_mask_str)
         return False
