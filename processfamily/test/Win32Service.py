@@ -1,3 +1,10 @@
+from __future__ import print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 __author__ = 'matth'
 
 import os
@@ -74,20 +81,20 @@ def usage():
         fname = os.path.split(sys.argv[0])[1]
     except:
         fname = sys.argv[0]
-    print "Usage: '%s [options] install|update|remove|start [...]|stop|restart [...]|debug [...]'" % fname
-    print "Options for 'install' and 'update' commands only:"
-    print " --username domain\\username : The Username the service is to run under"
-    print " --password password : The password for the username"
-    print " --startup [manual|auto|disabled|delayed] : How the service starts, default = manual"
-    print " --interactive : Allow the service to interact with the desktop."
-    print " --perfmonini file: .ini file to use for registering performance monitor data"
-    print " --perfmondll file: .dll file to use when querying the service for"
-    print "   performance data, default = perfmondata.dll"
-    print "Options for 'start' and 'stop' commands only:"
-    print " --wait seconds: Wait for the service to actually start or stop."
-    print "                 If you specify --wait with the 'stop' option, the service"
-    print "                 and all dependent services will be stopped, each waiting"
-    print "                 the specified period."
+    print("Usage: '%s [options] install|update|remove|start [...]|stop|restart [...]|debug [...]'" % fname)
+    print("Options for 'install' and 'update' commands only:")
+    print(" --username domain\\username : The Username the service is to run under")
+    print(" --password password : The password for the username")
+    print(" --startup [manual|auto|disabled|delayed] : How the service starts, default = manual")
+    print(" --interactive : Allow the service to interact with the desktop.")
+    print(" --perfmonini file: .ini file to use for registering performance monitor data")
+    print(" --perfmondll file: .dll file to use when querying the service for")
+    print("   performance data, default = perfmondata.dll")
+    print("Options for 'start' and 'stop' commands only:")
+    print(" --wait seconds: Wait for the service to actually start or stop.")
+    print("                 If you specify --wait with the 'stop' option, the service")
+    print("                 and all dependent services will be stopped, each waiting")
+    print("                 the specified period.")
     sys.exit(1)
 
 def HandleCommandLine():

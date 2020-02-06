@@ -1,3 +1,13 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from future.utils import text_to_native_str
 __author__ = 'matth'
 
 import unittest
@@ -14,6 +24,8 @@ from processfamily.processes import process_exists, kill_process, AccessDeniedEr
 from processfamily import _traceback_str
 import signal
 import threading
+
+from processfamily.futurecompat import get_env_dict, list_to_native_str
 
 if sys.platform.startswith('win'):
     from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO, CREATE_BREAKAWAY_FROM_JOB
@@ -105,7 +117,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
         #Wait up to 15 secs for the all ports to be available (the parent might wait 10 for a middle child):
         start_time = time.time()
         still_waiting = True
-        ports_to_wait = range(4) if wait_for_children else [0]
+        ports_to_wait = list(range(4)) if wait_for_children else [0]
         if not wait_for_middle_child:
             ports_to_wait.remove(2)
         while still_waiting and time.time() - start_time < 15:
@@ -115,7 +127,7 @@ class _BaseProcessFamilyFunkyWebServerTestSuite(unittest.TestCase):
                     s = socket.socket()
                     try:
                         s.connect(("localhost", Config.get_starting_port_nr()+i))
-                    except socket.error, e:
+                    except socket.error as e:
                         still_waiting = True
                         break
                 finally:
@@ -402,11 +414,11 @@ class NormalSubprocessTests(_BaseProcessFamilyFunkyWebServerTestSuite):
         kwargs={}
         if sys.platform.startswith('win'):
             kwargs['creationflags'] = CREATE_BREAKAWAY_FROM_JOB
-        environ = os.environ.copy()
+        environ = get_env_dict()
         if timeout:
-            environ["STARTUP_TIMEOUT"] = str(timeout)
+            environ[text_to_native_str("STARTUP_TIMEOUT")] = text_to_native_str(timeout)
         self.parent_process = subprocess.Popen(
-            [sys.executable, self.get_path_to_ParentProcessPy()],
+            list_to_native_str([sys.executable, self.get_path_to_ParentProcessPy()]),
             close_fds=True, env=environ, **kwargs)
         threading.Thread(target=self.parent_process.communicate).start()
 
@@ -440,7 +452,8 @@ if sys.platform.startswith('win'):
         def setUpClass(cls, service_username=None):
             cls.send_stop_and_then_wait_for_service_to_stop_ignore_errors()
             cls.service_exe = build_service_exe()
-            subprocess.check_call([cls.service_exe] + (["--username", service_username] if service_username else []) + ["install"])
+            cmd = [cls.service_exe] + (["--username", service_username] if service_username else []) + ["install"]
+            subprocess.check_call(list_to_native_str(cmd))
 
         @classmethod
         def tearDownClass(cls):

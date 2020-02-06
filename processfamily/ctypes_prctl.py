@@ -1,5 +1,12 @@
 """A subset of the operations that can be performed on a process provided by the prctl system call"""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 from ctypes import CDLL, c_int, byref, create_string_buffer
 from ctypes.util import find_library
 

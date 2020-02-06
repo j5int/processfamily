@@ -1,8 +1,19 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import *
 __author__ = 'matth'
 
 import os
 import sys
+
+from processfamily.futurecompat import get_env
+
 if __name__ == '__main__':
     #python issue 18298
     if sys.platform.startswith('win'):
@@ -81,7 +92,7 @@ class ProcessFamilyForTests(processfamily.ProcessFamily):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    STARTUP_TIMEOUT = int(os.environ.get("STARTUP_TIMEOUT", "") or "10")
+    STARTUP_TIMEOUT = int(get_env("STARTUP_TIMEOUT", "") or "10")
     logging.info("Starting")
     try:
         try:

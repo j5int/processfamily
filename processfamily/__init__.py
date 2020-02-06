@@ -1,4 +1,15 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import next
+from builtins import range
+from builtins import *
+from builtins import object
 __author__ = 'matth'
 
 import threading
@@ -13,13 +24,10 @@ import argparse
 import shlex
 import os
 import jsonrpc
-try:
-    import queue
-except ImportError:
-    import Queue as queue
+import queue
 import pkgutil
 from processfamily.threads import stop_threads
-from processfamily.processes import kill_process, process_exists, set_processor_affinity, cpu_count
+from processfamily.processes import kill_process, process_exists, set_process_affinity, cpu_count
 import signal
 import functools
 
@@ -354,7 +362,7 @@ class ChildCommsStrategy(object):
         finally:
             #Unstick any waiting command threads:
             with self._rsp_queues_lock:
-                for q in self._rsp_queues.values():
+                for q in list(self._rsp_queues.values()):
                     if q.empty():
                         q.put_nowait(None)
                 self._rsp_queues = None
@@ -665,11 +673,11 @@ class ProcessFamily(object):
 
     def set_parent_affinity_mask(self):
         if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
-            set_processor_affinity([0])
+            set_process_affinity({0})
 
     def set_child_affinity_mask(self, pid, child_index):
         i = child_index+1 if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED else child_index
-        set_processor_affinity([i%self.cpu_count], pid=pid)
+        set_process_affinity({i%self.cpu_count}, pid=pid)
 
     def start(self, timeout=30):
         if self.child_processes:

@@ -1,3 +1,11 @@
+from __future__ import print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import *
 import os
 import subprocess
 import msvcrt
@@ -22,7 +30,7 @@ pipefh.write("Hello from parent.")
 pipefh.close()
 
 pipein = os.fdopen(pipe2out, 'r')
-print pipein.read()
+print(pipein.read())
 pipein.close()
 
 # Wait for the child to finish

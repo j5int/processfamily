@@ -1,4 +1,11 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 __author__ = 'matth'
 
 from distutils.core import setup
@@ -25,7 +32,7 @@ setup(
         'Programming Language :: Python',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    install_requires = ["json-rpc", "affinity"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else []),
+    install_requires = ["json-rpc"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else []),
     extras_require = {
         'tests': ['nose', 'requests'] + (['py-exe-builder'] if sys.platform.startswith("win") else []),
     }

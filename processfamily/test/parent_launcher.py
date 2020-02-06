@@ -1,3 +1,10 @@
+from __future__ import print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 __author__ = 'Administrator'
 
 import subprocess
@@ -19,13 +26,13 @@ if __name__ == '__main__':
     def wait_for_end():
         try:
             while True:
-                print 'Waiting'
+                print('Waiting')
                 if parent_process.poll() is not None:
-                    print 'Ended'
+                    print('Ended')
                     return
                 time.sleep(1)
         except Exception as e:
-            print _traceback_str()
+            print(_traceback_str())
 
     t = threading.Thread(target=parent_process.wait)
     t.start()
@@ -34,4 +41,4 @@ if __name__ == '__main__':
             t.join(1)
     except Exception as e:
         kill_process(parent_process.pid)
-    print "Done"
+    print("Done")
