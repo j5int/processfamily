@@ -112,7 +112,7 @@ else:
 
 def get_process_affinity(pid=None):
     """Gets the process_affinity cores either for the current process or the given pid. Returns a list of cores"""
-    return affinity.get_process_affinity_mask(pid or 0)
+    return affinity.sched_getaffinity(pid or 0)
 
 def set_process_affinity(mask, pid=None):
     """Sets the process_affinity to the given cores, either for the current process or the given pid. mask can be an affinity mask or list of cores. Returns success"""

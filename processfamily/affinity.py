@@ -46,7 +46,7 @@ elif sys.platform.startswith("win"):
         handle = win32api.OpenProcess(win32con.PROCESS_SET_INFORMATION, False, pid)
         win32process.SetProcessAffinityMask(handle, _cores_to_mask(mask))
 else:
-    def set_process_affinity_mask(*args, **kwargs):
+    def sched_setaffinity(*args, **kwargs):
         raise NotImplementedError()
-    def get_process_affinity_mask(*args, **kwargs):
+    def sched_getaffinity(*args, **kwargs):
         raise NotImplementedError()
