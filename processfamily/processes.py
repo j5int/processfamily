@@ -11,7 +11,7 @@ __author__ = 'matth'
 import os
 import sys
 import logging
-import affinity
+from processfamily import affinity
 
 if sys.platform.startswith("win"):
     import win32api
@@ -109,41 +109,19 @@ else:
         return multiprocessing.cpu_count()
 
 
-def _affinity_mask_to_list(mask):
-    """converts a mask to a list of cores"""
-    cores = []
-    i = 0
-    while mask:
-        if mask % 2:
-            cores.append(i)
-        mask >>= 1
-        i += 1
-    return cores
 
-def _create_affinity_mask(mask_or_list):
-    """converts a list of cores to a mask if necessary"""
-    if isinstance(mask_or_list, int):
-        return mask_or_list
-    cores = mask_or_list
-    mask = 0
-    for core in cores:
-        mask |= 1 << core
-    return mask
-
-def get_processor_affinity(pid=None):
+def get_process_affinity(pid=None):
     """Gets the process_affinity cores either for the current process or the given pid. Returns a list of cores"""
-    mask = affinity.get_process_affinity_mask(pid or 0)
-    return _affinity_mask_to_list(mask)
+    return affinity.get_process_affinity_mask(pid or 0)
 
-def set_processor_affinity(mask, pid=None):
+def set_process_affinity(mask, pid=None):
     """Sets the process_affinity to the given cores, either for the current process or the given pid. mask can be an affinity mask or list of cores. Returns success"""
-    mask = _create_affinity_mask(mask)
     pid = pid or 0
-    previous_mask = affinity.set_process_affinity_mask(pid, mask)
-    current_mask = affinity.get_process_affinity_mask(pid)
-    current_mask_str = ", ".join(str(i) for i in _affinity_mask_to_list(current_mask))
-    if current_mask != mask:
-        request_mask_str = ", ".join(str(i) for i in _affinity_mask_to_list(mask))
+    affinity.sched_setaffinity(pid, mask)
+    current_mask = affinity.sched_getaffinity(pid)
+    current_mask_str = ", ".join(str(i) for i in current_mask)
+    if set(current_mask) != set(mask):
+        request_mask_str = ", ".join(str(i) for i in mask)
         logger.warning("Set process affinity for pid %d to cores %s unsuccessful: actually set to %s", pid, request_mask_str, current_mask_str)
         return False
     else:

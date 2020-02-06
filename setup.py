@@ -32,7 +32,7 @@ setup(
         'Programming Language :: Python',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    install_requires = ["json-rpc", "affinity"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else []),
+    install_requires = ["json-rpc"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else []),
     extras_require = {
         'tests': ['nose', 'requests'] + (['py-exe-builder'] if sys.platform.startswith("win") else []),
     }

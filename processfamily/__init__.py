@@ -30,7 +30,7 @@ except ImportError:
     import queue as queue
 import pkgutil
 from processfamily.threads import stop_threads
-from processfamily.processes import kill_process, process_exists, set_processor_affinity, cpu_count
+from processfamily.processes import kill_process, process_exists, set_process_affinity, cpu_count
 import signal
 import functools
 
@@ -676,11 +676,11 @@ class ProcessFamily(object):
 
     def set_parent_affinity_mask(self):
         if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED:
-            set_processor_affinity([0])
+            set_process_affinity({0})
 
     def set_child_affinity_mask(self, pid, child_index):
         i = child_index+1 if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED else child_index
-        set_processor_affinity([i%self.cpu_count], pid=pid)
+        set_process_affinity({i%self.cpu_count}, pid=pid)
 
     def start(self, timeout=30):
         if self.child_processes:
