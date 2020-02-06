@@ -19,7 +19,6 @@ elif sys.platform.startswith("win"):
     import win32process
 
     def _cores_to_mask(cores):
-        """converts a list of cores to a mask if necessary"""
         mask = 0
         for core in cores:
             mask |= 1 << core

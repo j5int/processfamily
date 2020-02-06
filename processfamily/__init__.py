@@ -24,10 +24,7 @@ import argparse
 import shlex
 import os
 import jsonrpc
-try:
-    import queue
-except ImportError:
-    import queue as queue
+import queue
 import pkgutil
 from processfamily.threads import stop_threads
 from processfamily.processes import kill_process, process_exists, set_process_affinity, cpu_count
