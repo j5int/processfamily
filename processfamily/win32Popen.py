@@ -6,7 +6,6 @@ from __future__ import unicode_literals
 native_int = int
 
 from future import standard_library
-from future.utils import PY3
 standard_library.install_aliases()
 from builtins import str
 from past.builtins import basestring
