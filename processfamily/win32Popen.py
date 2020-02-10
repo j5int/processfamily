@@ -244,6 +244,25 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
              c2pread, c2pwrite,
              errread, errwrite) = args_tuple
             to_close = None
+        elif sys.hexversion > 0x03040000: # 3.4.0 and later
+            (args, executable, preexec_fn, close_fds,
+                                pass_fds, cwd, env,
+                                input_startupinfo, creationflags, shell,
+                                p2cread, p2cwrite,
+                                c2pread, c2pwrite,
+                                errread, errwrite,
+                                restore_signals, start_new_session) = args_tuple
+            #TODO: the to_close set used to be passed back on python 2, so we need to work out how to properly handle it
+            to_close = set()
+            to_close.add(p2cread)
+            # if stdin == PIPE:
+            #     to_close.add(p2cwrite)
+            to_close.add(c2pwrite)
+            # if stdout == PIPE:
+            #     to_close.add(c2pread)
+            to_close.add(errwrite)
+            # if stderr == PIPE:
+            #     to_close.add(errread)
         else: # 2.7.6 and later
             (args, executable, preexec_fn, close_fds,
              cwd, env, universal_newlines, input_startupinfo,
