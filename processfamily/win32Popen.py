@@ -354,7 +354,7 @@ class ProcThreadAttributeHandleListPopen(subprocess.Popen):
                 _close_in_parent(errwrite)
 
         self._child_created = True
-        self._handle = hp.value if PY3 else hp
+        self._handle = subprocess.Handle(hp) if hasattr(subprocess, 'Handle') else hp
         self._thread = ht
         self.pid = pid
         self.tid = tid
