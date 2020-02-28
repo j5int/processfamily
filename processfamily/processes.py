@@ -112,16 +112,23 @@ else:
 
 def get_process_affinity(pid=None):
     """Gets the process_affinity cores either for the current process or the given pid. Returns a list of cores"""
-    return affinity.sched_getaffinity(pid or 0)
+    try:
+        return affinity.sched_getaffinity(pid or 0)
+    except NotImplementedError:
+        return {}
 
 def set_process_affinity(mask, pid=None):
     """Sets the process_affinity to the given cores, either for the current process or the given pid. mask can be an affinity mask or list of cores. Returns success"""
     pid = pid or 0
-    affinity.sched_setaffinity(pid, mask)
-    current_mask = affinity.sched_getaffinity(pid)
+    request_mask_str = ", ".join(str(i) for i in mask)
+    try:
+        affinity.sched_setaffinity(pid, mask)
+        current_mask = affinity.sched_getaffinity(pid)
+    except NotImplementedError:
+        logger.warning("Set process affinity for pid %d to cores %s unsuccessful: Not implemented", pid, request_mask_str)
+        return False
     current_mask_str = ", ".join(str(i) for i in current_mask)
     if current_mask != set(mask):
-        request_mask_str = ", ".join(str(i) for i in mask)
         logger.warning("Set process affinity for pid %d to cores %s unsuccessful: actually set to %s", pid, request_mask_str, current_mask_str)
         return False
     else:
