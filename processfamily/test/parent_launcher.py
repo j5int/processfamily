@@ -37,7 +37,7 @@ if __name__ == '__main__':
     t = threading.Thread(target=parent_process.wait)
     t.start()
     try:
-        while t.isAlive():
+        while t.is_alive():
             t.join(1)
     except Exception as e:
         kill_process(parent_process.pid)

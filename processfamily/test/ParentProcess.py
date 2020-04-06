@@ -105,13 +105,13 @@ if __name__ == '__main__':
                     family.start(timeout=STARTUP_TIMEOUT)
                     server_thread = threading.Thread(target=server.run)
                     server_thread.start()
-                    while server_thread.isAlive():
+                    while server_thread.is_alive():
                         server_thread.join(1)
                 except KeyboardInterrupt:
                     logging.info("Stopping...")
                     server.stop()
             finally:
-                if server_thread and server_thread.isAlive():
+                if server_thread and server_thread.is_alive():
                     server_thread.join(5)
         finally:
             stop_threads()
