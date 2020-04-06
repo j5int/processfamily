@@ -317,7 +317,7 @@ class NormalSubprocessFixture(FunkyWebServerFixtureBase):
             kwargs['creationflags'] = CREATE_BREAKAWAY_FROM_JOB
         environ = get_env_dict()
         if timeout:
-            environ[text_to_native_str("STARTUP_TIMEOUT")] = text_to_native_str(timeout)
+            environ[text_to_native_str("STARTUP_TIMEOUT")] = native_str(timeout)
         self.parent_process = subprocess.Popen(
             list_to_native_str([sys.executable, path_to_ParentProcessPy]),
             close_fds=True, env=environ, **kwargs)
