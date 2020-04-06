@@ -20,11 +20,12 @@ if __name__ == '__main__':
         #When running under pythonw.exe you can end up with 'invalid' files for stdin+stdout+stder
         #For this reason, I just open devnull for them
         # (this was a problem because the HTTPServer tries to write to stderr
-        if sys.stderr.fileno() < 0:
+        # In Python 2 the fileno() < 0 in Python 3 the "files" are just None
+        if sys.stderr is None or sys.stderr.fileno() < 0:
             sys.stderr = open(os.devnull, "w")
-        if sys.stdout.fileno() < 0:
+        if sys.stdout is None or sys.stdout.fileno() < 0:
             sys.stdout = open(os.devnull, "w")
-        if sys.stdin.fileno() < 0:
+        if sys.stdin is None or sys.stdin.fileno() < 0:
             sys.stdin = open(os.devnull, "r")
 
     pid = os.getpid()
