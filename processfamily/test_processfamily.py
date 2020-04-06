@@ -394,6 +394,9 @@ class WindowsServiceFixture(FunkyWebServerFixtureBase):
 
 @pytest.fixture(scope="session")
 def network_service_user_permissions():
+    reason = WindowsServiceFixture.shouldSkip()
+    if reason:
+        pytest.skip(reason)
     # I do this just in case we left the service running by interrupting the tests
     send_stop_and_then_wait_for_service_to_stop_ignore_errors()
     tmp_dir = os.path.join(os.path.dirname(__file__), 'test', 'tmp')
@@ -436,9 +439,8 @@ def windows_service(service_exe):
         yield x
 
 
-# If you only want to run against one fixture specify -k [fixture on the command line
-# e.g. pytest -k [normal_subprocess
-# (Closing [ is ommited on purpose)
+# If you only want to run against one fixture specify -k fixture on the command line
+# e.g. pytest -k normal_subprocess
 @pytest.fixture(params=[
     pytest.lazy_fixture('normal_subprocess'),
     pytest.lazy_fixture('pythonw'),
