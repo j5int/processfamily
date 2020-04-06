@@ -366,9 +366,9 @@ def pythonw():
 # copy it from <env>\python\Lib\site-packages\pywin32_system32 and put it there.
 #
 # then you must open an administrator console
-# then run pytest -k [windows_service
-# (The right ] was ommited on purpose)
+# then run pytest -k windows_service
 class WindowsServiceFixture(FunkyWebServerFixtureBase):
+    skip_interrupt_main = "Interrupt main doesn't do anything useful in a windows service"
 
     def __init__(self, username, *args, **kwargs):
         self.username = username
@@ -467,8 +467,8 @@ class TestFunkyWebServer():
         send_parent_http_command("crash")
 
     def test_parent_interrupt_main(self, fws):
-        if isinstance(fws, WindowsServiceFixture):
-            pytest.skip("Interrupt main doesn't do anything useful in a windows service")
+        if fws.skip_intterupt_main:
+            pytest.skip(fws.skip_intterupt_main)
         fws.start_up()
         send_parent_http_command("interrupt_main")
 
