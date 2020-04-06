@@ -469,8 +469,8 @@ class TestFunkyWebServer():
         send_parent_http_command("crash")
 
     def test_parent_interrupt_main(self, fws):
-        if fws.skip_intterupt_main:
-            pytest.skip(fws.skip_intterupt_main)
+        if fws.skip_interrupt_main:
+            pytest.skip(fws.skip_interrupt_main)
         fws.start_up()
         send_parent_http_command("interrupt_main")
 
