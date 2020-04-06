@@ -128,7 +128,7 @@ class MyHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         return "OK"
 
     def _to_json_rsp(self, o):
-        return json.dumps(o, indent=3, encoding='UTF-8')
+        return json.dumps(o, indent=3).encode('utf-8')
 
     def send_head(self, content):
         """Common code for GET and HEAD commands.
