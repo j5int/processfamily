@@ -6,6 +6,7 @@ from future import standard_library
 standard_library.install_aliases()
 from builtins import *
 from builtins import object
+from future.utils import PY2
 __author__ = 'matth'
 
 import http.server
@@ -213,6 +214,11 @@ class FunkyWebServer(object):
         if cls._open_file_handle is None and cls.process_number == 0:
             logging.info("Opening a file and keeping it open")
             cls._open_file_handle = open(os.path.join(os.path.dirname(__file__), 'tmp', 'testfile.txt'), 'w')
+            # The tests expect file descriptors to be inheritable, but from Python 3.4 onwards, file descriptors
+            # are set to be not inheritable by default.
+            if not PY2:
+                os.set_inheritable(cls._open_file_handle.fileno(), True)
+
 
     def run(self):
         with self.httpd_lock:
