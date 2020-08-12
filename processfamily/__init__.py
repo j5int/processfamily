@@ -514,7 +514,7 @@ class ForkingChildSignalStrategy(SignalStrategy):
     def monitor_child_startup(self, end_time):
         """generator method to monitor process startup, with the first yield after sending a ping,
         the next after receiving a response, and stopping after cleanup"""
-        while (self._process_instance.poll() is None) and time.time() < end_time:
+        while not os.path.exists(self.process_family.pid_file) and time.time() < end_time:
             # Python 2.7 has the timeout parameter for wait, but it is not documented
             # try:
             #     subprocess.Popen().wait(end_time - time.time())
