@@ -34,8 +34,7 @@ if sys.platform.startswith('win'):
     from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO, CREATE_BREAKAWAY_FROM_JOB
     import win32service
     import win32serviceutil
-    if PY2:
-        from processfamily.test.ExeBuilder import build_service_exe
+    from processfamily.test.ExeBuilder import build_service_exe
     from processfamily.processes import USE_PROCESS_QUERY_LIMITED_INFORMATION
 
 

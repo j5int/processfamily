@@ -22,15 +22,6 @@ class ServiceExeBuilder(ExeBuilder):
                  service_module='processfamily.test.Win32Service',
                  module_exe_name='processfamily-test-svc.exe')
 
-    def get_code_snippet_to_set_sys_path(self):
-        return r"""
-sys.path = %r
-sys.path.append(%r)
-sys.path.append(%r)
-""" % (sys.path,
-       os.path.abspath(os.path.dirname(pywintypes.__file__)),
-       os.path.abspath(os.path.dirname(pythoncom.__file__)),
-        )
 
 def build_service_exe():
     dest_dir = os.path.join(os.path.dirname(__file__), "tmp", "bin")
