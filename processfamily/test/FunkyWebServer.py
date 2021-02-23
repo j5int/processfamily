@@ -205,9 +205,9 @@ class FunkyWebServer(object):
 
         if not sys.platform.startswith('win'):
             if cls.process_number > 0:
-                prctl.set_name('python-pfchild')
+                prctl.set_name(b'python-pfchild')
             else:
-                prctl.set_name('python-pfparent')
+                prctl.set_name(b'python-pfparent')
 
         cls.num_children = args.num_children or 3
 
