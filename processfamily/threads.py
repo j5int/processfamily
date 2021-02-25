@@ -10,6 +10,9 @@ from __future__ import unicode_literals
 
 from future import standard_library
 standard_library.install_aliases()
+
+from future.utils import PY2
+
 from builtins import filter
 from builtins import *
 from past.utils import old_div
@@ -46,7 +49,7 @@ def thread_async_raise(thread, exctype):
         raise SystemError("PyThreadState_SetAsyncExc failed")
 
 def get_thread_id(thread):
-    if not thread.isAlive():
+    if not thread.is_alive():
         raise threading.ThreadError("the thread is not active")
     # Is it defined on the thread object?
     if hasattr(thread, "ident"):
@@ -74,9 +77,14 @@ def find_thread_frames(loglevel=logging.INFO):
 def get_thread_callstr(thread):
     """returns a string indicating how the given thread was called"""
     try:
-        thread_args = thread._Thread__args
-        thread_kwargs = thread._Thread__kwargs
-        thread_target = thread._Thread__target
+        if PY2:
+            thread_args = thread._Thread__args
+            thread_kwargs = thread._Thread__kwargs
+            thread_target = thread._Thread__target
+        else:
+            thread_args = thread._args
+            thread_kwargs = thread._kwargs
+            thread_target = thread._target
         if thread_target:
             thread_name = thread_target.__name__
         else:
@@ -88,14 +96,14 @@ def get_thread_callstr(thread):
 
 def graceful_stop_thread(thread, thread_wait=0.5):
     """try to stop the given thread gracefully if it is still alive. Returns success"""
-    if thread.isAlive():
+    if thread.is_alive():
         # this attempts to raise an exception in the thread; the sleep allows the switch or natural end of the thread
         try:
             thread_async_raise(thread, SystemExit)
         except Exception as e:
             logger.info("Error trying to raise exit message in thread %s:\n%s", thread.getName(), _traceback_str())
         time.sleep(thread_wait)
-    if thread.isAlive():
+    if thread.is_alive():
         return False
     else:
         logger.info("Thread %s stopped gracefully", thread.getName())
@@ -103,16 +111,19 @@ def graceful_stop_thread(thread, thread_wait=0.5):
 
 def forceful_stop_thread(thread):
     """stops the given thread forcefully if it is alive"""
-    if thread.isAlive():
+    if thread.is_alive():
         logger.warning("Stopping thread %s forcefully", thread.getName())
         try:
-            if sys.version_info.major < 3:
+            # TODO REVIEW As far as I can tell this actually just marks the
+            # thread as being stopped it doesn't actually stop the thread
+            if PY2:
                 thread._Thread__stop()
             else:
-                thread.stop()
+                thread._tstate_lock.release()
+                thread._stop()
         except Exception as e:
             logger.warning("Error stopping thread %s: %s", thread.getName(), e)
-    return not thread.isAlive()
+    return not thread.is_alive()
 
 def stop_thread(thread, thread_wait=1.0):
     """stops the given thread if it is still alive - first gently, then forcefully if it does not respond to an exception raise within thread_wait seconds"""
@@ -153,11 +164,11 @@ def log_thread_tracebacks(threads, stop_event=None, finished_event=None, logleve
     if finished_event:
         finished_event.set()
 
-def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tracebacks=True, exclude_thread_fn=None):
+def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tracebacks=True, exclude_thread_fn=None, thread_class=threading.Thread):
     """enumerates remaining threads and stops them"""
     current_thread = threading.currentThread()
     def find_stop_threads():
-        return [t for t in filter_threads(list(threading._active.values()), current_thread, exclude_threads, exclude_thread_fn=exclude_thread_fn) if t.isAlive()]
+        return [t for t in filter_threads(list(threading._active.values()), current_thread, exclude_threads, exclude_thread_fn=exclude_thread_fn) if t.is_alive()]
     remaining_threads = find_stop_threads()
     threads_to_stop = []
     for thread in remaining_threads:
@@ -171,7 +182,7 @@ def stop_threads(global_wait=2.0, thread_wait=1.0, exclude_threads=None, log_tra
     traceback_stop_event = threading.Event()
     traceback_finished_event = threading.Event()
     if log_tracebacks:
-        traceback_thread = threading.Thread(target=log_thread_tracebacks, name="stop_thread_tracebacks", args=(threads_to_stop, traceback_stop_event, traceback_finished_event))
+        traceback_thread = thread_class(target=log_thread_tracebacks, name="stop_thread_tracebacks", args=(threads_to_stop, traceback_stop_event, traceback_finished_event))
         traceback_thread.start()
         # wait for the tracebacks to stop, and give them a chance to abort if they take too long
         logger.info("Started traceback thread")
