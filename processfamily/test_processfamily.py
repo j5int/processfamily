@@ -28,6 +28,7 @@ from processfamily import _traceback_str
 import signal
 import threading
 import pytest
+from pytest_lazyfixture import lazy_fixture
 
 from processfamily.futurecompat import get_env_dict, list_to_native_str
 
@@ -63,10 +64,10 @@ def assert_middle_child_port_unbound():
     logging.info("Checking for ability to bind to port %d", port)
     serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        if not sys.platform.startswith('win'):
+        #if not sys.platform.startswith('win'):
             # On linux I need this setting cos we are starting and stopping things
             # so frequently that they are still in a STOP_WAIT state when I get here
-            serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         serversocket.bind(("", port))
     except Exception as e:
         pytest.fail("Middle child port is not unbound as expected")
@@ -95,10 +96,10 @@ def check_server_ports_unbound():
         logging.info("Checking for ability to bind to port %d", port)
         serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            if not sys.platform.startswith('win'):
+            #if not sys.platform.startswith('win'):
                 # On linux I need this setting cos we are starting and stopping things
                 # so frequently that they are still in a STOP_WAIT state when I get here
-                serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             serversocket.bind(("", port))
         except Exception as e:
             bound_ports.append(port)
@@ -254,6 +255,7 @@ class FunkyWebServerFixtureBase(object):
             for pid in processes_left_running:
                 try:
                     kill_process_ignore_access_denied(pid)
+                    processes_left_running.remove(pid)
                 except Exception as e:
                     logging.warning("Error killing process with pid %d: %s", pid, _traceback_str())
 
@@ -263,6 +265,7 @@ class FunkyWebServerFixtureBase(object):
             for pid in processes_left_running:
                 while process_exists_or_access_denied(int(pid)) and time.time() - start_time < 40:
                     time.sleep(0.3)
+
 
         check_server_ports_unbound()
         assert not processes_left_running, "There should have been no PIDs left running but there were: %s" % (
@@ -283,7 +286,7 @@ class FunkyWebServerFixtureBase(object):
         ports_to_wait = list(range(4)) if wait_for_children else [0]
         if not wait_for_middle_child:
             ports_to_wait.remove(2)
-        while still_waiting and time.time() - start_time < 15:
+        while still_waiting and time.time() - start_time < 30:
             still_waiting = False
             for i in ports_to_wait:
                 try:
@@ -297,7 +300,7 @@ class FunkyWebServerFixtureBase(object):
                     s.close()
             if still_waiting:
                 time.sleep(0.3)
-        assert not still_waiting, "Waited 10 seconds and some http ports are still not accessible"
+        assert not still_waiting, "Waited 30 seconds and some http ports are still not accessible"
 
     @classmethod
     def pseudo_fixture(cls, *args, **kwargs):
@@ -444,9 +447,9 @@ def windows_service(service_exe):
 # If you only want to run against one fixture specify -k fixture on the command line
 # e.g. pytest -k normal_subprocess
 @pytest.fixture(params=[
-    pytest.lazy_fixture('normal_subprocess'),
-    pytest.lazy_fixture('pythonw'),
-    pytest.lazy_fixture('windows_service'),
+    lazy_fixture('normal_subprocess'),
+    lazy_fixture('pythonw'),
+    lazy_fixture('windows_service'),
 ])
 def fws(request):
     return request.param

@@ -170,6 +170,7 @@ class MyHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     def __init__(self, port):
         MyHTTPRequestHandler.http_server = self
         http.server.HTTPServer.__init__(self, ("", port), MyHTTPRequestHandler)
+        self.allow_reuse_address = True
 
     def handle_error(self, request, client_address):
         logging.error('Exception happened during processing of request from %s:\n%s', client_address, _traceback_str())
