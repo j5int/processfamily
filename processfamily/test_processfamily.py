@@ -64,9 +64,6 @@ def assert_middle_child_port_unbound():
     logging.info("Checking for ability to bind to port %d", port)
     serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        #if not sys.platform.startswith('win'):
-            # On linux I need this setting cos we are starting and stopping things
-            # so frequently that they are still in a STOP_WAIT state when I get here
         serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         serversocket.bind(("", port))
     except Exception as e:
@@ -96,9 +93,6 @@ def check_server_ports_unbound():
         logging.info("Checking for ability to bind to port %d", port)
         serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            #if not sys.platform.startswith('win'):
-                # On linux I need this setting cos we are starting and stopping things
-                # so frequently that they are still in a STOP_WAIT state when I get here
             serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             serversocket.bind(("", port))
         except Exception as e:
