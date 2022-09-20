@@ -6,6 +6,7 @@ from future import standard_library
 standard_library.install_aliases()
 from builtins import *
 from builtins import object
+from future.utils import PY2
 __author__ = 'matth'
 
 import http.server
@@ -128,7 +129,7 @@ class MyHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         return "OK"
 
     def _to_json_rsp(self, o):
-        return json.dumps(o, indent=3, encoding='UTF-8')
+        return json.dumps(o, indent=3).encode('utf-8')
 
     def send_head(self, content):
         """Common code for GET and HEAD commands.
@@ -169,6 +170,7 @@ class MyHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     def __init__(self, port):
         MyHTTPRequestHandler.http_server = self
         http.server.HTTPServer.__init__(self, ("", port), MyHTTPRequestHandler)
+        self.allow_reuse_address = True
 
     def handle_error(self, request, client_address):
         logging.error('Exception happened during processing of request from %s:\n%s', client_address, _traceback_str())
@@ -204,15 +206,19 @@ class FunkyWebServer(object):
 
         if not sys.platform.startswith('win'):
             if cls.process_number > 0:
-                prctl.set_name('python-pfchild')
+                prctl.set_name(b'python-pfchild')
             else:
-                prctl.set_name('python-pfparent')
+                prctl.set_name(b'python-pfparent')
 
         cls.num_children = args.num_children or 3
 
         if cls._open_file_handle is None and cls.process_number == 0:
             logging.info("Opening a file and keeping it open")
             cls._open_file_handle = open(os.path.join(os.path.dirname(__file__), 'tmp', 'testfile.txt'), 'w')
+            # The tests expect file descriptors to be inheritable, but from Python 3.4 onwards, file descriptors
+            # are set to be not inheritable by default.
+            if not PY2:
+                os.set_inheritable(cls._open_file_handle.fileno(), True)
 
     def run(self):
         with self.httpd_lock:
