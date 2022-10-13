@@ -682,7 +682,6 @@ class ProcessFamily(object):
 
     def allow_child_to_float(self, pid):
         """ Allows the process given by pid to not be tied to any of the cores. """
-        logging.info("allowing %s to float", pid)
         set_process_affinity(list(range(self.cpu_count)), pid=pid)
 
     def start(self, timeout=30):
@@ -708,7 +707,6 @@ class ProcessFamily(object):
                     if self.CPU_AFFINITY_STRATEGY in [CPU_AFFINITY_STRATEGY_CHILDREN_ONLY, CPU_AFFINITY_STRATEGY_PARENT_INCLUDED]:
                         self.set_child_affinity_mask(p.pid, i)
                     elif self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_NONE:
-                        logger.info("rofl tying to processes %s %s", p.pid, self.cpu_count)
                         self.allow_child_to_float(p.pid)
                 except Exception as e:
                     logger.error("Unable to set affinity for %s process %d: %s", self.get_child_name(i), p.pid, e)
