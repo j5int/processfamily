@@ -381,9 +381,10 @@ class ChildCommsStrategy(object):
 #being killed
 _global_process_job_handle = None
 
-CPU_AFFINITY_STRATEGY_NONE = 0
-CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1
-CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2
+CPU_AFFINITY_STRATEGY_INHERIT = 0  # By default, process affinity masks are inherited by child processes. This retains that behavior
+CPU_AFFINITY_STRATEGY_CHILDREN_ONLY = 1  # Only the child processes that are spawned will get their processes affinity tied to a core
+CPU_AFFINITY_STRATEGY_PARENT_INCLUDED = 2  # Like the above, except that the parent process also gets it affinity tied to a core
+CPU_AFFINITY_STRATEGY_NONE = 3  # This overrides any default defined by the OS and allows spawned processes to float regardless of the affinity of the parent
 
 
 class NoCommsStrategy(ChildCommsStrategy):
@@ -679,6 +680,10 @@ class ProcessFamily(object):
         i = child_index+1 if self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_PARENT_INCLUDED else child_index
         set_process_affinity({i%self.cpu_count}, pid=pid)
 
+    def allow_child_to_float(self, pid):
+        """ Allows the process given by pid to not be tied to any of the cores. """
+        set_process_affinity(list(range(self.cpu_count)), pid=pid)
+
     def start(self, timeout=30):
         if self.child_processes:
             raise Exception("Invalid state: start() can only be called once")
@@ -697,11 +702,15 @@ class ProcessFamily(object):
             logger.debug("Commandline for %s: %s", self.get_child_name(i), json.dumps(cmd))
             p = self.get_Popen_class()(cmd, **self.get_Popen_kwargs(i, close_fds=self.CLOSE_FDS))
 
-            if self.CPU_AFFINITY_STRATEGY and p.poll() is None:
+            if p.poll() is None:
                 try:
-                    self.set_child_affinity_mask(p.pid, i)
+                    if self.CPU_AFFINITY_STRATEGY in [CPU_AFFINITY_STRATEGY_CHILDREN_ONLY, CPU_AFFINITY_STRATEGY_PARENT_INCLUDED]:
+                        self.set_child_affinity_mask(p.pid, i)
+                    elif self.CPU_AFFINITY_STRATEGY == CPU_AFFINITY_STRATEGY_NONE:
+                        self.allow_child_to_float(p.pid)
                 except Exception as e:
                     logger.error("Unable to set affinity for %s process %d: %s", self.get_child_name(i), p.pid, e)
+
             self.child_processes.append(self.CHILD_COMMS_STRATEGY(p, self.ECHO_STD_ERR, i, self))
 
         if sys.platform.startswith('win') and self.WIN_PASS_HANDLES_OVER_COMMANDLINE:

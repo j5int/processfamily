@@ -14,7 +14,7 @@ import sys
 
 setup(
     name='processfamily',
-    version='0.8',
+    version='0.9',
     packages = find_packages(),
     license='Apache License, Version 2.0',
     description='A library for launching, maintaining, and terminating a family of long-lived python child processes on Windows and *nix.',

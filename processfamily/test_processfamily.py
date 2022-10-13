@@ -31,6 +31,7 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from processfamily.futurecompat import get_env_dict, list_to_native_str
+from processfamily.processes import get_process_affinity, set_process_affinity, cpu_count
 
 if sys.platform.startswith('win'):
     from processfamily._winprocess_ctypes import CAN_USE_EXTENDED_STARTUPINFO, CREATE_BREAKAWAY_FROM_JOB
@@ -74,6 +75,14 @@ def assert_middle_child_port_unbound():
 
 def get_pid_files():
     return glob.glob(os.path.join(pid_dir, "*.pid"))
+
+
+def get_pids():
+    pids = []
+    for filename in get_pid_files():
+        with open(filename) as pidfile:
+            pids.append(int(pidfile.read()))
+    return pids
 
 
 def kill_parent():
@@ -627,9 +636,40 @@ class TestFunkyWebServer():
                      'use_job_object_off')
         check_stop()
 
-    def test_cpu_affinity_off(self, fws):
-        fws.start_up(test_command='cpu_affinity_off')
+    def test_cpu_affinity_inherit(self, fws):
+        fws.start_up(test_command='cpu_affinity_inherit')
         check_stop()
+
+    def test_affinity_inherited_by_children(self, fws):
+        tied_to_cores = [0]
+        set_process_affinity(tied_to_cores)
+        fws.start_up(test_command='cpu_affinity_inherit')
+        children_pids = []
+        for pid in get_pids():
+            children_pids.append(list(get_process_affinity(pid)))
+        check_stop()
+        for child_pids in children_pids:
+            assert child_pids == tied_to_cores
+        set_process_affinity(range(cpu_count()))
+
+    def test_no_affinity_children_float(self, fws):
+        tied_to_cores = {0}
+        all_cores = set(range(cpu_count()))
+        set_process_affinity(tied_to_cores)
+        fws.start_up(test_command='cpu_affinity_off')
+        children_affinity = []
+        for pid in get_pids():
+            children_affinity.append(set(get_process_affinity(pid)))
+        check_stop()
+        parent_pid_checked = False
+        for affinity in children_affinity:
+            if affinity == tied_to_cores:
+                assert not parent_pid_checked, "More than 1 process detected with parent affinity"
+                parent_pid_checked = True
+            else:
+                assert affinity == all_cores
+        set_process_affinity(all_cores)
+
 
     def test_handles_over_commandline_off_file_open_by_parent(self, fws):
         if not sys.platform.startswith('win') or not CAN_USE_EXTENDED_STARTUPINFO:

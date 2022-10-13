@@ -64,8 +64,10 @@ class ProcessFamilyForTests(processfamily.ProcessFamily):
                 self.CLOSE_FDS = False
             elif command == 'use_job_object_off':
                 self.WIN_USE_JOB_OBJECT = False
+            elif command == 'cpu_affinity_inherit':
+                self.CPU_AFFINITY_STRATEGY = processfamily.CPU_AFFINITY_STRATEGY_INHERIT
             elif command == 'cpu_affinity_off':
-                self.CPU_AFFINITY_STRATEGY = None
+                self.CPU_AFFINITY_STRATEGY = processfamily.CPU_AFFINITY_STRATEGY_NONE
             elif command == 'use_cat' or command == 'use_cat_comms_none':
                 self.WIN_PASS_HANDLES_OVER_COMMANDLINE = False
                 self.CHILD_COMMS_STRATEGY = processfamily.CHILD_COMMS_STRATEGY_PIPES_CLOSE if command == 'use_cat' else processfamily.CHILD_COMMS_STRATEGY_NONE
