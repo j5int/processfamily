@@ -32,8 +32,8 @@ setup(
         'Programming Language :: Python',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    install_requires = ["json-rpc", "future"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else []),
+    install_requires = ["json-rpc", "future", "pywin32;platform_system=='Windows'", "mozprocess;platform_system=='Windows'"],
     extras_require = {
-        'tests': ['pytest', 'pytest-lazy-fixture', 'requests'] + (['py-exe-builder'] if sys.platform.startswith("win") else []),
+        'tests': ['pytest', 'pytest-lazy-fixture', 'requests', "py-exe-builder;platform_system=='Windows'"],
     }
 )
