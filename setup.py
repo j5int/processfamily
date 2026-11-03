@@ -2,11 +2,10 @@ __author__ = 'matth'
 
 from distutils.core import setup
 from setuptools import find_packages
-import sys
 
 setup(
     name='processfamily',
-    version='0.10.1',
+    version='0.10.2',
     packages = find_packages(),
     license='Apache License, Version 2.0',
     description='A library for launching, maintaining, and terminating a family of long-lived python child processes on Windows and *nix.',
@@ -24,8 +23,8 @@ setup(
         'Programming Language :: Python',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    install_requires = ["json-rpc", "future"] + (['pywin32', "mozprocess"] if sys.platform.startswith("win") else []),
+    install_requires = ["json-rpc", "future", "pywin32; sys_platform == 'win32'", "mozprocess; sys_platform == 'win32'"],
     extras_require = {
-        'tests': ['pytest', 'pytest-lazy-fixture', 'requests'] + (['py-exe-builder'] if sys.platform.startswith("win") else []),
+        'tests': ['pytest', 'pytest-lazy-fixture', 'requests', "py-exe-builder; sys_platform == 'win32'"],
     }
 )
